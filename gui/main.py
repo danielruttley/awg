@@ -425,7 +425,7 @@ class MainWindow(QMainWindow):
     def calculate_all_segments(self):
         for segment in self.segments:
             for channel in range(self.card_settings['active_channels']):
-                segment[channel].calculate()
+                segment['Ch{}'.format(channel)].calculate()
         self.segment_list_update()
 
     def update_label_awg(self):
@@ -505,12 +505,12 @@ class MainWindow(QMainWindow):
         """
         print(segment_params)
         self.w = None
-        segment = []
+        segment = {}
         for channel in range(self.card_settings['active_channels']):
             channel_params = {'duration_ms':segment_params['duration_ms']}
-            channel_params = {**channel_params,**segment_params[channel]}
+            channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
             action = ActionContainer(channel_params,self.card_settings)
-            segment[channel] = action
+            segment['Ch{}'.format(channel)] = action
         if editing_segment is None:
             try:
                 selected_row = [x.row() for x in self.list_segments.selectedIndexes()][0]
@@ -520,6 +520,11 @@ class MainWindow(QMainWindow):
         else:
             self.segments[editing_segment] = segment
         self.segment_list_update()
+    
+    # def segment_calculate(self,index):
+    #     segment = self.list_segments[index]
+    #     for channel in range(self.card_settings['active_channels']):
+    #         segment['Ch{}'.format(channel)].calculate()
 
     def segment_remove_all(self):
         self.segments = []
@@ -612,7 +617,7 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem()
             label = '{}: duration_ms={}'.format(i,segment['Ch0'].duration_ms)
             for channel in range(self.card_settings['active_channels']):
-                action = segment[channel]
+                action = segment['Ch{}'.format(channel)]
                 label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
                 if action.needs_to_calculate:
                     item.setBackground(QColor('#dfbbf0'))  
@@ -725,8 +730,8 @@ class MainWindow(QMainWindow):
             for i,segment in enumerate(self.segments):
                 if i > 0:
                     for channel in range(self.card_settings['active_channels']):
-                        current_action = segment[channel]
-                        prev_action = self.segments[i-1][channel]
+                        current_action = segment['Ch{}'.format(channel)]
+                        prev_action = self.segments[i-1]['Ch{}'.format(channel)]
                         try:
                             prev_freqs = prev_action.freq_params['end_freq_MHz']
                         except:
@@ -749,8 +754,8 @@ class MainWindow(QMainWindow):
             for i,segment in enumerate(self.segments):
                 if i > 0:
                     for channel in range(self.card_settings['active_channels']):
-                        current_action = segment[channel]
-                        prev_action = self.segments[i-1][channel]
+                        current_action = segment['Ch{}'.format(channel)]
+                        prev_action = self.segments[i-1]['Ch{}'.format(channel)]
                         if current_action.freq_function_name == 'static':
                             current_freqs = current_action.freq_params['start_freq_MHz']
                             new_prev_seg_end_freqs = []
@@ -787,6 +792,7 @@ class MainWindow(QMainWindow):
                                 else:
                                     new_start_freqs.append(start_freq)       
                             current_action.update_param('freq','start_freq_MHz',new_start_freqs)
+            # self.segment_list_update()
 
     def prevent_amp_jumps(self):
         if self.button_prevent_amp_jumps.isChecked():
@@ -794,25 +800,26 @@ class MainWindow(QMainWindow):
                 if i > 0:
                     for channel in range(self.card_settings['active_channels']):
                         try:
-                            prev_amps = self.segments[i-1][channel].amp_params['end_amp']
+                            prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['end_amp']
                         except:
-                            prev_amps = self.segments[i-1][channel].amp_params['start_amp']
+                            prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['start_amp']
                         new_start_amps = []
-                        for tone in range(len(segment[channel].amp_params['start_amp'])):
-                            start_amp = segment[channel].amp_params['start_amp'][tone]
+                        for tone in range(len(segment['Ch{}'.format(channel)].amp_params['start_amp'])):
+                            start_amp = segment['Ch{}'.format(channel)].amp_params['start_amp'][tone]
                             if not start_amp in prev_amps:
                                 new_start_amp = min(prev_amps, key=lambda x:abs(x-start_amp))
                                 logging.warning('Changed segment {} Ch{} start_amp from {} to {} to avoid an amplitude jump'.format(i,channel,start_amp,new_start_amp))
                                 new_start_amps.append(new_start_amp)
                             else:
                                 new_start_amps.append(start_amp)
-                        segment[channel].update_param('amp','start_amp',new_start_amps)
+                        segment['Ch{}'.format(channel)].update_param('amp','start_amp',new_start_amps)
+            # self.segment_list_update()
             
     def freq_adjust_static_segments(self):
         if self.button_freq_adjust_static_segments.isChecked():
             for i, segment in enumerate(self.segments):
                 for channel in range(self.card_settings['active_channels']):
-                    action = segment[channel]
+                    action = segment['Ch{}'.format(channel)]
                     if action.freq_function_name == 'static':
                         duration_ms = action.duration_ms
                         adjusted_freqs = []
@@ -821,7 +828,26 @@ class MainWindow(QMainWindow):
                             if adjusted_freq != unadjusted_freq:
                                 logging.warning('Adjusted static frequency of segment {} Ch{} from {} to {}'.format(i,channel,unadjusted_freq,adjusted_freq))
                             adjusted_freqs.append(adjusted_freq)
-                        segment[channel].update_param('freq','start_freq_MHz',adjusted_freqs)
+                        segment['Ch{}'.format(channel)].update_param('freq','start_freq_MHz',adjusted_freqs)
+            # self.segment_list_update()
+                    #     try:
+                    #         pass
+                    #     except Exception as e:
+                    #         logging.error('Error when freq adjusting',e)
+                    # try:
+                    #     prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['end_amp']
+                    # except:
+                    #     prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['start_amp']
+                    # new_start_amps = []
+                    # for tone in range(len(segment['Ch{}'.format(channel)].amp_params['start_amp'])):
+                    #     start_amp = segment['Ch{}'.format(channel)].amp_params['start_amp'][tone]
+                    #     if not start_amp in prev_amps:
+                    #         new_start_amp = min(prev_amps, key=lambda x:abs(x-start_amp))
+                    #         logging.warning('Changed segment {} Ch{} start_amp from {} to {} to avoid an amplitude jump'.format(i,channel,start_amp,new_start_amp))
+                    #         new_start_amps.append(new_start_amp)
+                    #     else:
+                    #         new_start_amps.append(start_amp)
+                    # segment['Ch{}'.format(channel)].update_param('amp','start_amp',new_start_amps)
 
     def couple_steps_segments(self):
         """Creates a single step for each segment.
@@ -968,7 +994,7 @@ class MainWindow(QMainWindow):
                 current_pos = 0
                 for step in self.steps:
                     for i in range(step['number_of_loops']):
-                        action = self.segments[step['segment']][channel]
+                        action = self.segments[step['segment']]['Ch{}'.format(channel)]
                         freqs, amps = action.get_autoplot_traces()
                         xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
                         for j,(freq,amp) in enumerate(zip(freqs,amps)):
@@ -1003,7 +1029,7 @@ class MainWindow(QMainWindow):
         self.calculate_all_segments()
         for seg_num,segment in enumerate(self.segments):
             for channel in range(self.card_settings['active_channels']):
-                data = segment[channel].data
+                data = segment['Ch{}'.format(channel)].data
                 filename = export_directory+"/seg{}ch{}.csv".format(seg_num,channel)
                 print(filename)
                 np.savetxt(filename, data, delimiter=",")
@@ -1157,7 +1183,7 @@ class SegmentCreationWindow(QWidget):
             channel_params = {}
             channel_success, channel_params['freq'], channel_params['amp'] = channel_widget.get_params()
 
-            segment_params[index] = channel_params
+            segment_params['Ch{}'.format(index)] = channel_params
             
             if not channel_success:
                 success = False
@@ -1199,7 +1225,7 @@ class SegmentChannelWidget(QWidget):
         print(self.editing)
         
         if self.editing is not None:
-            self.segment = self.main_window.segments[self.editing][self.channel_index]
+            self.segment = self.main_window.segments[self.editing]['Ch{}'.format(self.channel_index)]
         else:
             self.segment = None
 
