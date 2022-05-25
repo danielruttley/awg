@@ -1,3 +1,7 @@
+# Project specfic
+testing/
+awg/Spectrum code examples
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
