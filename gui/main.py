@@ -13,7 +13,7 @@ from qtpy.QtWidgets import (QApplication,QMainWindow,QVBoxLayout,QWidget,
                             QAction,QListWidget,QFormLayout,QComboBox,QLineEdit,
                             QTextEdit,QPushButton,QFileDialog,QAbstractItemView,
                             QGridLayout,QLabel,QHBoxLayout,QCheckBox,QFrame,QListWidgetItem)
-from qtpy.QtGui import QIcon,QIntValidator,QDoubleValidator,QColor
+from qtpy.QtGui import QIcon,QIntValidator,QDoubleValidator,QColor,QFont
 
 import pyqtgraph as pg
 
@@ -37,6 +37,8 @@ color_rb = '#bdd7ee'
 color_loop_until_trigger = '#ffff99'
 color_rearr_off = '#e04848'
 color_rearr_on = '#05a815'
+color_rearr_on_background = '#92f09b'
+color_needs_to_calculate = '#dfbbf0'
 
 class QHLine(QFrame):
     """Helper widget to draw horizontal lines in the GUI."""
@@ -113,16 +115,7 @@ class MainWindow(QMainWindow):
                               }
         
         self.rearr_settings = {'channel':0,
-                               'start_freqs_MHz':[100,102],
-                               'target_freqs_MHz':[101],
-                               'rearr_amp':0.2,
-                               'static_duration_ms':1,
-                               'moving_duration_ms':1,
-                               'moving_hybridicity':0,
-                               'ramp_duration_ms':1,
-                               'final_amp':1,
-                               'alt_freqs':[100],
-                               'alt_amp':1
+                               'target_freq_MHz':[101]
                                }
         
         self.rr = None#RearrangementHandler()
@@ -144,6 +137,8 @@ class MainWindow(QMainWindow):
 
         self.segments = []
         self.steps = []
+        
+        self.plot_autoplot_graphs()
 
     def _create_awg_header(self):
         layout = QGridLayout()
@@ -185,13 +180,13 @@ class MainWindow(QMainWindow):
         self.button_couple_steps_segments.clicked.connect(self.couple_steps_segments)
         layout_prevent_jumps.addWidget(self.button_couple_steps_segments,0,0,1,1)
 
-        self.button_prevent_freq_jumps = QCheckBox("Prevent frequency jumps")
+        self.button_prevent_freq_jumps = QCheckBox("Prevent frequency jumps \n(will not edit rearr. segs.)")
         self.button_prevent_freq_jumps.setEnabled(False)
         # self.button_prevent_freq_jumps.clicked.connect(self.prevent_freq_jumps)
         self.button_prevent_freq_jumps.clicked.connect(self.segment_list_update)
         layout_prevent_jumps.addWidget(self.button_prevent_freq_jumps,1,0,1,1)
 
-        self.button_prevent_amp_jumps = QCheckBox("Prevent amplitude jumps")
+        self.button_prevent_amp_jumps = QCheckBox("Prevent amplitude jumps \n(will not edit rearr. segs.)")
         self.button_prevent_amp_jumps.setEnabled(False)
         # self.button_prevent_amp_jumps.clicked.connect(self.prevent_amp_jumps)
         self.button_prevent_amp_jumps.clicked.connect(self.segment_list_update)
@@ -216,7 +211,7 @@ class MainWindow(QMainWindow):
         self.button_rearr = QPushButton("Rearrangement OFF")
         self.button_rearr.setCheckable(True)
         self.button_rearr.setStyleSheet('background-color: '+color_rearr_off)
-        self.button_rearr.toggled.connect(self.toggle_rearrangement)
+        self.button_rearr.toggled.connect(self.rearr_toggle)
         rearr_layout.addWidget(self.button_rearr)
         
         self.button_rearr_settings = QPushButton('rearrangement settings')
@@ -311,11 +306,19 @@ class MainWindow(QMainWindow):
         """
         self._clear_layout(self.layout_autoplotter)
         self.layout_autoplotter.addWidget(QLabel('<h2>Autoplotter™</h2>'))
-
+        
+        layout_autoplot_options = QHBoxLayout()
+        
         self.button_autoplot = QCheckBox("Autoplot")
         self.button_autoplot.clicked.connect(self.plot_autoplot_graphs)
         self.button_autoplot.setChecked(True)
-        self.layout_autoplotter.addWidget(self.button_autoplot)
+        layout_autoplot_options.addWidget(self.button_autoplot)
+        
+        self.button_autoplot_condense_rearr = QCheckBox("Condense rearrange segments")
+        self.button_autoplot_condense_rearr.clicked.connect(self.plot_autoplot_graphs)
+        layout_autoplot_options.addWidget(self.button_autoplot_condense_rearr)
+
+        self.layout_autoplotter.addLayout(layout_autoplot_options)
         
         layout_channel_columns = QHBoxLayout()
         
@@ -377,16 +380,6 @@ class MainWindow(QMainWindow):
                     widget.deleteLater()
                 else:
                     self._clear_layout(item.layout())
-    
-    def toggle_rearrangement(self):
-        if self.button_rearr.isChecked():
-            self.button_rearr.setText("Rearrangement ON")
-            self.button_rearr.setStyleSheet('background-color: '+color_rearr_on)
-            
-            
-        else:
-            self.button_rearr.setText("Rearrangement OFF")
-            self.button_rearr.setStyleSheet('background-color: '+color_rearr_off)
             
     def open_rearr_settings_window(self):
         self.w = RearrSettingsWindow(self,self.rearr_settings)
@@ -421,11 +414,12 @@ class MainWindow(QMainWindow):
             self.rearr_settings[setting] = new_rearr_settings[setting]
         self.w = None
         logging.debug(self.rearr_settings)
+        self.rearr_toggle()
     
     def calculate_all_segments(self):
         for segment in self.segments:
             for channel in range(self.card_settings['active_channels']):
-                segment['Ch{}'.format(channel)].calculate()
+                segment[channel].calculate()
         self.segment_list_update()
 
     def update_label_awg(self):
@@ -454,33 +448,72 @@ class MainWindow(QMainWindow):
                 except IndexError:
                     pass
             self.segment_list_update()
-        print(self.segments)
 
     def segment_up(self):
         selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
         if len(selectedRows) == 0:
             logging.error('A segment must be selected before it can be moved.')
+            return
         elif len(selectedRows) > 1:
             logging.error('Only one segment can be moved at once.')
+            return
         else:
             currentRow = selectedRows[0]
-            if currentRow != 0:
-                self.segments[currentRow],self.segments[currentRow-1] = self.segments[currentRow-1],self.segments[currentRow]
-                self.segment_list_update()
-                self.list_segments.setCurrentRow(currentRow-1)
+            if currentRow == 0:
+                logging.error('Cannot move the first segment up.')
+                return
+            
+            current_segment = int(self.list_segments.currentItem().text().split(' ')[0])
+            
+            if self.rr != None:
+                if current_segment in self.rr.segments:
+                    logging.error('Cannot move rearrangement segments. Turn off '
+                                  'rearrangement first.')
+                    return
+                elif current_segment == self.rr.segments[-1] + 1:
+                    logging.error('Cannot move segments through the '
+                                  'rearrangement segments. Turn off '
+                                  'rearrangement first.')
+                    return
+            self.segments[current_segment],self.segments[current_segment-1] = self.segments[current_segment-1],self.segments[current_segment]
+            self.segment_list_update()
+            self.list_segments.setCurrentRow(currentRow-1)
 
     def segment_down(self):
+        """Moves the selected segment in the list attribute `list_segments` 
+        down one row. If rearrangement is on, the `list_segments` index may 
+        not match up with the `segments` index, so the segments index is 
+        extracted from the first number in the label text.
+        
+        """
         selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
         if len(selectedRows) == 0:
             logging.error('A segment must be selected before it can be moved.')
+            return
         elif len(selectedRows) > 1:
             logging.error('Only one segment can be moved at once.')
+            return
         else:
             currentRow = selectedRows[0]
-            if currentRow != self.list_segments.count()-1:
-                self.segments[currentRow],self.segments[currentRow+1] = self.segments[currentRow+1],self.segments[currentRow]
-                self.segment_list_update()
-                self.list_segments.setCurrentRow(currentRow+1)
+            if currentRow == self.list_segments.count()-1:
+                logging.error('Cannot move the final segment down.')
+                return
+            
+            current_segment = int(self.list_segments.currentItem().text().split(' ')[0])
+            
+            if self.rr != None:
+                if current_segment in self.rr.segments:
+                    logging.error('Cannot move rearrangement segments. Turn off '
+                                  'rearrangement first.')
+                    return
+                elif current_segment == self.rr.segments[0] - 1:
+                    logging.error('Cannot move segments through the '
+                                  'rearrangement segments. Turn off '
+                                  'rearrangement first.')
+                    return
+            self.segments[current_segment],self.segments[current_segment+1] = self.segments[current_segment+1],self.segments[current_segment]
+            self.segment_list_update()
+            self.list_segments.setCurrentRow(currentRow+1)
     
     def segment_add(self,segment_params,editing_segment=None):
         """Add a new segment to the segment list or edits an exisiting 
@@ -493,6 +526,10 @@ class MainWindow(QMainWindow):
             Keys should be 'Ch0', 'Ch1', ... and values should be parameter
             dictionaries to be passed though to the `ActionContainer` object; 
             see that docstring for required format.
+            
+            There should also be a key `duration_ms` which specifies the 
+            duration of the action: this must be the same for all channels 
+            in the segment.
         editing_segment : None or int, optional
             Index of the segment to be overwritten with the supplied
             `segment_params` The default is None, and will instead result in
@@ -505,12 +542,12 @@ class MainWindow(QMainWindow):
         """
         print(segment_params)
         self.w = None
-        segment = {}
+        segment = []
         for channel in range(self.card_settings['active_channels']):
             channel_params = {'duration_ms':segment_params['duration_ms']}
             channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
             action = ActionContainer(channel_params,self.card_settings)
-            segment['Ch{}'.format(channel)] = action
+            segment.append(action)
         if editing_segment is None:
             try:
                 selected_row = [x.row() for x in self.list_segments.selectedIndexes()][0]
@@ -520,14 +557,146 @@ class MainWindow(QMainWindow):
         else:
             self.segments[editing_segment] = segment
         self.segment_list_update()
-    
-    # def segment_calculate(self,index):
-    #     segment = self.list_segments[index]
-    #     for channel in range(self.card_settings['active_channels']):
-    #         segment['Ch{}'.format(channel)].calculate()
 
+    def rearr_toggle(self):
+        """Converts a sweeping frequency segment into one handled by the
+        `RearrangementHandler` class to dynamically change the played segment.
+        
+        The start frequencies are extracted from the frequency step before and 
+        the target frequencies are taken from the `rearr_settings` attribute.
+        
+        All other parameters are taken from the parameters of the first tone
+        of the function being converted.
+        
+        If another channel is in use, this is unaffected and its parameters 
+        will be duplicated across all affected segments.
+        
+        """
+        #TODO ensure phase continuity is still obeyed.
+        if self.button_rearr.isChecked():       
+            selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
+            if self.rr == None:
+                if len(selectedRows) == 0:
+                    logging.error('A segment must be selected before it can be made '
+                                  'into a rearrange segment.')
+                    self.button_rearr.setChecked(False)
+                    return
+                elif len(selectedRows) > 1:
+                    logging.error('Only one segment can be made into a rearrange '
+                                  'segment at once.')
+                    self.button_rearr.setChecked(False)
+                    return
+                index = selectedRows[0]
+                if index == 0:
+                    logging.error('Segment 0 cannot be converted into a rearrangement '
+                                  'segment.')
+                    self.button_rearr.setChecked(False)
+                    return
+                
+                segment = self.segments[index]
+                rearr_channel = self.rearr_settings['channel']
+                
+                if not 'end_freq_MHz' in segment[rearr_channel].freq_params.keys():
+                    logging.error('The selected segment does not sweep the frequency '
+                                  'in the rearrangement axis so can not be made into '
+                                  'a rearrangement segment.')
+                    self.button_rearr.setChecked(False)
+                    return
+            else:
+                for i in self.rr.segments[:0:-1]:
+                    self.segments.pop(i)
+                    
+                index = self.rr.segments[0]
+                
+                segment = self.segments[index]
+                rearr_channel = self.rearr_settings['channel']
+                    
+            prev_segment = self.segments[index-1]
+            try:
+                start_freq_MHz = prev_segment[rearr_channel].freq_params['end_freq_MHz']
+            except:
+                start_freq_MHz = prev_segment[rearr_channel].freq_params['start_freq_MHz']
+            target_freq_MHz = self.rearr_settings['target_freq_MHz']
+            
+            self.rr = RearrangementHandler(start_freq_MHz,target_freq_MHz)
+            
+            occupation_start_freqs = self.rr.get_occupation_freqs()
+            
+            rr_segments = []
+            
+            for start_freqs in occupation_start_freqs:
+                rr_seg = []
+                for channel in range(self.card_settings['active_channels']):
+                    if channel == rearr_channel:
+                        rearr_action_params = segment[rearr_channel].get_action_params()
+                        freq_params = rearr_action_params['freq']
+                        amp_params = rearr_action_params['amp']
+                        for key,value in freq_params.items():
+                            if key == 'start_freq_MHz':
+                                freq_params[key] = start_freqs
+                            elif key == 'end_freq_MHz':
+                                freq_params[key] = target_freq_MHz
+                            elif key == 'function':
+                                pass
+                            else:
+                                freq_params[key] = [freq_params[key][0]]*len(target_freq_MHz)
+                        for key,value in amp_params.items():
+                            if key == 'function':
+                                pass
+                            else:
+                                amp_params[key] = [amp_params[key][0]]*len(target_freq_MHz)
+                        # print(rearr_action_params)
+                        action = ActionContainer(rearr_action_params,self.card_settings)
+                        action.rearr = True
+                        rr_seg.append(action)
+                    else:
+                        rr_seg.append(segment[channel])
+                rr_segments.append(rr_seg)
+            
+            
+            self.rr.set_start_index(index)
+            self.segments.pop(index)
+            self.segments[index:index] = rr_segments
+            
+            self.segment_list_update()
+            
+            self.button_rearr.setText("Rearrangement ON: segments {} - {}".format(self.rr.segments[0],self.rr.segments[-1]))
+            self.button_rearr.setStyleSheet('background-color: '+color_rearr_on)
+                
+        else:
+            if self.rr != None:
+                for i in self.rr.segments[:0:-1]:
+                    print(i)
+                    self.segments.pop(i)
+                for action in self.segments[self.rr.segments[0]]:
+                    action.rearr = False
+                self.rr = None
+            self.button_rearr.setText("Rearrangement OFF")
+            self.button_rearr.setStyleSheet('background-color: '+color_rearr_off)
+            self.segment_list_update()
+            
+    def rearr_step_update(self):
+        """Iterates through the `steps` attribute list and finds the first one
+        with the boolean rearr set to True. This step is set to the 
+        rearrangement step that will be modified with the correct segment when 
+        recieving a string from PyDex.
+        
+        Sets all other rearr booleans to false.
+        
+        """
+        if self.rr == None:
+            return
+        self.rr.steps = []
+        for i,step in enumerate(self.steps):
+            if (step['rearr']):
+                self.rr.steps.append(i)
+                logging.debug('Set step {} to a rearrangement step'.format(i))
+        logging.debug('Rearrangement steps: {}'.format(self.rr.steps))
+            
     def segment_remove_all(self):
         self.segments = []
+        self.rr = None
+        self.button_rearr.setChecked(False)
         self.segment_list_update()
 
     def step_add_dialogue(self):
@@ -594,12 +763,35 @@ class MainWindow(QMainWindow):
                 self.list_steps.setCurrentRow(currentRow+1)
     
     def step_add(self,step_params):
-        print(step_params)
+        """Adds a step with the parameters passed through to the function.
+        
+        If rearrangement mode is active and one of the rearrangement 
+        segments is chosen, the step will default to the first rearrangement 
+        segment and the rearr boolean will be set to True.
+        
+        """
         self.w = None
+        if not step_params['segment'] in list(range(len(self.segments))):
+            logging.error('The selected segment {} does not exist. Cancelling '
+                          'step creation.'.format(step_params['segment']))
+            return
         try:
             selected_row = [x.row() for x in self.list_steps.selectedIndexes()][0]
         except:
             selected_row = self.list_steps.count()-1
+        
+        if self.rr != None:
+            if (step_params['segment'] in self.rr.segments) and (not step_params['rearr']):
+                logging.warning('Rearrangement segment {} has been selected '
+                                'for step {} but this step does not have '
+                                'rearrangment active.'.format(step_params['segment'],selected_row))
+            elif step_params['rearr']:
+                step_params['segment'] = self.rr.segments[0]
+        elif step_params['rearr']:
+            logging.error('Step {} has rearrangment toggled on but there is '
+                          'no rearrangement segments. Turning rearrangement '
+                          'toggle off.'.format(selected_row))
+            step_params['rearr'] = False
         self.steps.insert(selected_row+1,step_params)
         self.step_list_update()
     
@@ -615,18 +807,38 @@ class MainWindow(QMainWindow):
             self.list_segments.takeItem(0)
         for i,segment in enumerate(self.segments):
             item = QListWidgetItem()
-            label = '{}: duration_ms={}'.format(i,segment['Ch0'].duration_ms)
-            for channel in range(self.card_settings['active_channels']):
-                action = segment['Ch{}'.format(channel)]
-                label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
-                if action.needs_to_calculate:
-                    item.setBackground(QColor('#dfbbf0'))  
-            item.setText(label)
-            self.list_segments.addItem(item)
+            needs_to_calculate = False
+            if (self.rr != None) and (i in self.rr.segments):
+                label = '{} - {}: REARRANGE: duration_ms={}'.format(self.rr.segments[0],self.rr.segments[0]+self.rr.num_segments-1,segment[0].duration_ms)
+                for channel in range(self.card_settings['active_channels']):
+                    action = segment[channel]
+                    label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
+                    if action.needs_to_calculate:
+                        needs_to_calculate = True
+                item.setText(label)
+                if needs_to_calculate:
+                    font = item.font()
+                    font.setItalic(True)
+                    item.setFont(font)
+                item.setBackground(QColor(color_rearr_on_background))
+                self.list_segments.addItem(item)
+                if i != self.rr.segments[0]:
+                    self.list_segments.setRowHidden(i,True)
+            else:
+                label = '{} : duration_ms={}'.format(i,segment[0].duration_ms)
+                for channel in range(self.card_settings['active_channels']):
+                    action = segment[channel]
+                    label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
+                    item.setText(label)
+                    if action.needs_to_calculate:
+                        needs_to_calculate = True
+                if needs_to_calculate:
+                    font = item.font()
+                    font.setItalic(True)
+                    item.setFont(font)
+                self.list_segments.addItem(item)
             
         self.couple_steps_segments()
-
-
         
     def get_segment_list_label(self,action,segment_number):
         """Returns a string summarising the parameters of the action.
@@ -667,11 +879,17 @@ class MainWindow(QMainWindow):
         return label
 
     def step_list_update(self):
+        self.rearr_step_update()
+        
         for i in range(self.list_steps.count()):
             self.list_steps.takeItem(0)
         for i,step in enumerate(self.steps):
             item = QListWidgetItem()
-            label = '{}: segment {}'.format(i,step['segment'])
+            if (self.rr != None) and (i in self.rr.steps):
+                label = '{}: REARRANGE: segments {} - {}'.format(i,self.rr.segments[0],self.rr.segments[-1])
+                item.setBackground(QColor(color_rearr_on_background))
+            else:
+                label = '{}: segment {}'.format(i,step['segment'])
             if step['number_of_loops'] != 1:
                 label += ' ({} loops)'.format(step['number_of_loops'])
             if step['after_step'] == 'loop_until_trigger':
@@ -720,6 +938,8 @@ class MainWindow(QMainWindow):
         static frequencies are successive and different enough to be frequency 
         adjusted to different values (e.g. if they have different `duration_ms`
         values).
+        
+        Rearrangement segments are completely unaffected.
 
         Returns
         -------
@@ -728,10 +948,10 @@ class MainWindow(QMainWindow):
         """
         if self.button_prevent_freq_jumps.isChecked():
             for i,segment in enumerate(self.segments):
-                if i > 0:
+                if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
                     for channel in range(self.card_settings['active_channels']):
-                        current_action = segment['Ch{}'.format(channel)]
-                        prev_action = self.segments[i-1]['Ch{}'.format(channel)]
+                        current_action = segment[channel]
+                        prev_action = self.segments[i-1][channel]
                         try:
                             prev_freqs = prev_action.freq_params['end_freq_MHz']
                         except:
@@ -752,10 +972,10 @@ class MainWindow(QMainWindow):
         
         if self.button_prevent_freq_jumps.isChecked():
             for i,segment in enumerate(self.segments):
-                if i > 0:
+                if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
                     for channel in range(self.card_settings['active_channels']):
-                        current_action = segment['Ch{}'.format(channel)]
-                        prev_action = self.segments[i-1]['Ch{}'.format(channel)]
+                        current_action = segment[channel]
+                        prev_action = self.segments[i-1][channel]
                         if current_action.freq_function_name == 'static':
                             current_freqs = current_action.freq_params['start_freq_MHz']
                             new_prev_seg_end_freqs = []
@@ -792,34 +1012,44 @@ class MainWindow(QMainWindow):
                                 else:
                                     new_start_freqs.append(start_freq)       
                             current_action.update_param('freq','start_freq_MHz',new_start_freqs)
-            # self.segment_list_update()
 
     def prevent_amp_jumps(self):
+        """Ensures amplitude continuity between segments by ensuring that all
+        values in the `start_amp` list of one action appear in the 
+        `end_amp` list of the previous action (or the `start_amp`
+        if that kwarg doesn't exist for the previous action).
+        
+        Rearrangement segments are completely unaffected.
+
+        Returns
+        -------
+        None.
+
+        """
         if self.button_prevent_amp_jumps.isChecked():
             for i,segment in enumerate(self.segments):
-                if i > 0:
+                if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
                     for channel in range(self.card_settings['active_channels']):
                         try:
-                            prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['end_amp']
+                            prev_amps = self.segments[i-1][channel].amp_params['end_amp']
                         except:
-                            prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['start_amp']
+                            prev_amps = self.segments[i-1][channel].amp_params['start_amp']
                         new_start_amps = []
-                        for tone in range(len(segment['Ch{}'.format(channel)].amp_params['start_amp'])):
-                            start_amp = segment['Ch{}'.format(channel)].amp_params['start_amp'][tone]
+                        for tone in range(len(segment[channel].amp_params['start_amp'])):
+                            start_amp = segment[channel].amp_params['start_amp'][tone]
                             if not start_amp in prev_amps:
                                 new_start_amp = min(prev_amps, key=lambda x:abs(x-start_amp))
                                 logging.warning('Changed segment {} Ch{} start_amp from {} to {} to avoid an amplitude jump'.format(i,channel,start_amp,new_start_amp))
                                 new_start_amps.append(new_start_amp)
                             else:
                                 new_start_amps.append(start_amp)
-                        segment['Ch{}'.format(channel)].update_param('amp','start_amp',new_start_amps)
-            # self.segment_list_update()
+                        segment[channel].update_param('amp','start_amp',new_start_amps)
             
     def freq_adjust_static_segments(self):
         if self.button_freq_adjust_static_segments.isChecked():
             for i, segment in enumerate(self.segments):
                 for channel in range(self.card_settings['active_channels']):
-                    action = segment['Ch{}'.format(channel)]
+                    action = segment[channel]
                     if action.freq_function_name == 'static':
                         duration_ms = action.duration_ms
                         adjusted_freqs = []
@@ -828,39 +1058,45 @@ class MainWindow(QMainWindow):
                             if adjusted_freq != unadjusted_freq:
                                 logging.warning('Adjusted static frequency of segment {} Ch{} from {} to {}'.format(i,channel,unadjusted_freq,adjusted_freq))
                             adjusted_freqs.append(adjusted_freq)
-                        segment['Ch{}'.format(channel)].update_param('freq','start_freq_MHz',adjusted_freqs)
-            # self.segment_list_update()
-                    #     try:
-                    #         pass
-                    #     except Exception as e:
-                    #         logging.error('Error when freq adjusting',e)
-                    # try:
-                    #     prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['end_amp']
-                    # except:
-                    #     prev_amps = self.segments[i-1]['Ch{}'.format(channel)].amp_params['start_amp']
-                    # new_start_amps = []
-                    # for tone in range(len(segment['Ch{}'.format(channel)].amp_params['start_amp'])):
-                    #     start_amp = segment['Ch{}'.format(channel)].amp_params['start_amp'][tone]
-                    #     if not start_amp in prev_amps:
-                    #         new_start_amp = min(prev_amps, key=lambda x:abs(x-start_amp))
-                    #         logging.warning('Changed segment {} Ch{} start_amp from {} to {} to avoid an amplitude jump'.format(i,channel,start_amp,new_start_amp))
-                    #         new_start_amps.append(new_start_amp)
-                    #     else:
-                    #         new_start_amps.append(start_amp)
-                    # segment['Ch{}'.format(channel)].update_param('amp','start_amp',new_start_amps)
+                        segment[channel].update_param('freq','start_freq_MHz',adjusted_freqs)
 
     def couple_steps_segments(self):
-        """Creates a single step for each segment.
-        Done such that the after_step and number_of_loops for the steps is conserved where possible.
-        """
+        """Creates a single step for each segment, with the exception of any
+        segments currently being used for rearrangement where only one step
+        is created for all the rearrangement segments.
+        
+        Done such that the after_step and number_of_loops for the steps 
+        is conserved for a particular segment if it is already in use. If the 
+        segment is used more than once, the first instance will take priority.
+        
+        """        
+        required_segments = list(range(len(self.segments)))
+        if self.rr != None:
+            required_segments = [x for x in required_segments if not x in self.rr.segments[1:]]
+        
+        print(required_segments)
+        
 
+        
         if self.button_couple_steps_segments.isChecked():
-            if len(self.steps) > len(self.segments):
-                self.steps = self.steps[:len(self.segments)]
-            elif len(self.steps) < len(self.segments):
-                self.steps += [{'segment': 0, 'number_of_loops': 1, 'after_step': 'continue'} for _ in range(len(self.segments)-len(self.steps))]
-            for i,step in enumerate(self.steps):
-                step['segment'] = i
+            new_steps = []
+            for segment in required_segments:
+                found_existing_step = False
+                if (self.rr != None) and (segment == self.rr.segments[0]):
+                    new_steps.append({'segment': segment, 'number_of_loops': 1, 'after_step' : 'continue','rearr' : True})
+                else:
+                    for step in self.steps:
+                        if step['segment'] == segment:
+                            step['rearr'] = False
+                            new_steps.append(step)
+                            found_existing_step = True
+                            break
+                    if not found_existing_step:
+                        new_steps.append({'segment': segment, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
+            self.steps = new_steps
+        
+            logging.debug('Coupled steps with segments. self.steps = {}'.format(self.steps))
+        
         self.step_list_update()
 
         self.button_step_add.setEnabled(not(self.button_couple_steps_segments.isChecked()))
@@ -871,7 +1107,7 @@ class MainWindow(QMainWindow):
 
         self.button_prevent_freq_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
         self.button_prevent_amp_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
-        self.button_prevent_phase_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
+        # self.button_prevent_phase_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
         if not(self.button_couple_steps_segments.isChecked()):
             self.button_prevent_freq_jumps.setChecked(False)
             self.button_prevent_amp_jumps.setChecked(False)
@@ -992,27 +1228,39 @@ class MainWindow(QMainWindow):
                 duration_xlabels = {}
                 segment_xlabels = {}
                 current_pos = 0
-                for step in self.steps:
-                    for i in range(step['number_of_loops']):
-                        action = self.segments[step['segment']]['Ch{}'.format(channel)]
-                        freqs, amps = action.get_autoplot_traces()
-                        xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
-                        for j,(freq,amp) in enumerate(zip(freqs,amps)):
-                            freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2))
-                            amp_plot.plot(xs,amp, pen=pg.mkPen(color=j,width=2))
+                for step_index, step in enumerate(self.steps):
+                    step_segments = [step['segment']]
+                    if (self.rr != None) and (step_index in self.rr.steps) and (not self.button_autoplot_condense_rearr.isChecked()):
+                        step_segments = self.rr.segments
+                    for segment in step_segments:
+                        for i in range(step['number_of_loops']):
+                            if self.rr != None:
+                                if (self.button_autoplot_condense_rearr.isChecked()) and (segment in self.rr.segments[1:]):
+                                    continue
+                                elif segment in self.rr.segments:
+                                    freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
+                                                                                brush=color_rearr_on_background,movable=False))
+                                    amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
+                                                                                brush=color_rearr_on_background,movable=False))
+                            action = self.segments[segment][channel]
+                            freqs, amps = action.get_autoplot_traces()
+                            xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
+                            for j,(freq,amp) in enumerate(zip(freqs,amps)):
+                                freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2))
+                                amp_plot.plot(xs,amp, pen=pg.mkPen(color=j,width=2))
+                                
+                            duration_xlabels[current_pos+0.5] = action.duration_ms
+                            segment_xlabels[current_pos+0.5] = segment
+                            freq_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
+                            amp_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
                             
-                        duration_xlabels[current_pos+0.5] = action.duration_ms
-                        segment_xlabels[current_pos+0.5] = step['segment']
-                        freq_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
-                        amp_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
-                        
-                        current_pos += 1
-                    if step['after_step'] == 'loop_until_trigger':
-                        freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+0.2),orientation='vertical',
-                                                                    brush=color_loop_until_trigger,movable=False))
-                        amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+0.2),orientation='vertical',
-                                                                    brush=color_loop_until_trigger,movable=False))
-                        current_pos += 0.2
+                            current_pos += 1
+                        if step['after_step'] == 'loop_until_trigger':
+                            freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+0.2),orientation='vertical',
+                                                                        brush=color_loop_until_trigger,movable=False))
+                            amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+0.2),orientation='vertical',
+                                                                        brush=color_loop_until_trigger,movable=False))
+                            current_pos += 0.2
                         
                 freq_plot.getAxis('top').setTicks([segment_xlabels.items()])
                 amp_plot.getAxis('top').setTicks([segment_xlabels.items()])
@@ -1029,7 +1277,7 @@ class MainWindow(QMainWindow):
         self.calculate_all_segments()
         for seg_num,segment in enumerate(self.segments):
             for channel in range(self.card_settings['active_channels']):
-                data = segment['Ch{}'.format(channel)].data
+                data = segment[channel].data
                 filename = export_directory+"/seg{}ch{}.csv".format(seg_num,channel)
                 print(filename)
                 np.savetxt(filename, data, delimiter=",")
@@ -1098,10 +1346,8 @@ class CardSettingsWindow(QWidget):
         for row in range(self.layout_card_settings.rowCount()):
             key = self.layout_card_settings.itemAt(row,0).widget().text()
             widget = self.layout_card_settings.itemAt(row,1).widget()
-            if key == 'active_channels':
+            if key in ['active_channels','number_of_segments']:
                 value = int(widget.currentText())
-            elif key == 'number_of_segments':
-                value = int(widget.text())
             else:
                 value = float(widget.text())
             new_card_settings[key] = value
@@ -1148,7 +1394,7 @@ class SegmentCreationWindow(QWidget):
         self.box_duration = QLineEdit()
         self.box_duration.setValidator(QDoubleValidator())
         if self.editing_segment is not None:
-            self.box_duration.setText(str(self.main_window.segments[self.editing_segment]['Ch0'].duration_ms))
+            self.box_duration.setText(str(self.main_window.segments[self.editing_segment][0].duration_ms))
         else:
             self.box_duration.setText(str(1))
             
@@ -1225,7 +1471,7 @@ class SegmentChannelWidget(QWidget):
         print(self.editing)
         
         if self.editing is not None:
-            self.segment = self.main_window.segments[self.editing]['Ch{}'.format(self.channel_index)]
+            self.segment = self.main_window.segments[self.editing][self.channel_index]
         else:
             self.segment = None
 
@@ -1371,8 +1617,9 @@ class StepCreationWindow(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        step_settings = ['segment','number_of_loops','after_step']
+        step_settings = ['segment','number_of_loops','after_step','rearr']
         after_step_options = ['continue','loop_until_trigger']
+        rearr_options = ['False','True']
 
         self.layout_step_settings = QFormLayout()
 
@@ -1380,6 +1627,10 @@ class StepCreationWindow(QWidget):
             if key == 'after_step':
                 widget = QComboBox()
                 widget.addItems(after_step_options)
+                widget.setCurrentText(after_step_options[0])
+            elif key == 'rearr':
+                widget = QComboBox()
+                widget.addItems(rearr_options)
                 widget.setCurrentText(after_step_options[0])
             else:
                 widget = QLineEdit()
@@ -1402,6 +1653,8 @@ class StepCreationWindow(QWidget):
             widget = self.layout_step_settings.itemAt(row,1).widget()
             if key == 'after_step':
                 value = widget.currentText()
+            elif key == 'rearr':
+                value = eval(widget.currentText())
             else:
                 value = int(widget.text())
             step_params[key] = value
@@ -1426,7 +1679,7 @@ class RearrSettingsWindow(QWidget):
             else:
                 widget = QLineEdit()
                 widget.setText(str(self.rearr_settings[key]))
-                if not 'freqs' in key:
+                if not 'freq' in key:
                     widget.setValidator(QDoubleValidator())
             self.layout_rearr_settings.addRow(key, widget)
         layout.addLayout(self.layout_rearr_settings)
@@ -1442,7 +1695,7 @@ class RearrSettingsWindow(QWidget):
             widget = self.layout_rearr_settings.itemAt(row,1).widget()
             if key == 'channel':
                 value = int(widget.currentText())
-            elif 'freqs' in key:
+            elif 'freq' in key:
                 try:
                     value = convert_str_to_list(widget.text())
                 except:

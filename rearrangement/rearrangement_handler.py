@@ -4,6 +4,7 @@ logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=loggin
 import sys
 import inspect
 import numpy as np
+import re
 
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
@@ -25,10 +26,24 @@ class RearrangementHandler():
     segments : dict of lists of `ActionHandler`
         dictionary containing the `RearrangementHandler` segments which 
         are accessed on demand
+    occupations : list
+        the possible ids that can be used to access segments
+    segments : int
+        The indicies of the segments used in the rearrangement sweep, in 
+        ascending order. When rearrangement is turned off, only the segment 
+        at the start of this list will remain.
+    steps : int or None
+        The rearrangement steps. This parameter is set by the `MainWindow` 
+        class to keep track of which steps should be modified when recieving 
+        a TCP message.
+        
+        This value will default to [] if a step has not already been set.
+    start_index : int
+        the index of the first rearrangement segment
         
     """
     
-    def __init__(self,rearr_settings,card_settings):
+    def __init__(self,start_freq_MHz,target_freq_MHz):
         """Create the `RearrangementHandler` object and assign its attributes.        
 
         Parameters
@@ -37,30 +52,26 @@ class RearrangementHandler():
             Dictionary containing the attributes to assign to the rearrangement 
             handler. These should be the attributes contained in the following 
             section.
-        card_settings : dict
-            Dictionary containing the AWG card settings from the GUI 
-            `MainWindow` class. These are passed directly to the generated 
-            `ActionContainer` objects.
             
         Attributes
         ----------
-        start_freqs_MHz : list of floats
+        start_freq_MHz : list of floats
             List of the initial starting array frequencies of the loading 
             array in MHz. Strings specifiying the loaded traps from the 
             Pydex `AtomChecker` should be in the same order as this list. The 
             traps should be in either ascending or descending frequency order 
             to prevent traps being moved through each other.
-        target_freqs_MHz : list of floats
+        target_freq_MHz : list of floats
             List of the initial starting array frequencies of the loading 
             array in MHz. Strings specifiying the loaded traps from the 
             Pydex `AtomChecker` should be in the same order as this list. The 
             traps should be in either ascending or descending frequency order 
-            (the same order as `start_freqs_MHz`) to prevent traps being moved 
+            (the same order as `start_freq_MHz`) to prevent traps being moved 
              through each other.
             
             The rearrangment handler will aim to fill this array as much as 
             possible. If behaviour similar to the old use_all mode is desired,
-            simply make the len(target_freqs_MHz) == len(start_freqs_MHz).
+            simply make the len(target_freq_MHz) == len(start_freq_MHz).
 
         Returns
         -------
@@ -68,17 +79,21 @@ class RearrangementHandler():
 
         """
         
-        for key, value in rearr_settings.items():
-            setattr(self,key,value)
+        # for key, value in rearr_settings.items():
+        #     setattr(self,key,value)
         
-        self.card_settings = card_settings
+        self.start_freq_MHz = start_freq_MHz
+        self.target_freq_MHz = target_freq_MHz
+        self.start_index = 0
+        self.steps = []
         
-        if len(self.target_freqs_MHz) > len(self.start_freqs_MHz):
-            logging.warning('target_freqs_MHz was longer than start_freqs_MHz. Discarding '
+        if len(self.target_freq_MHz) > len(self.start_freq_MHz):
+            logging.warning('target_freq_MHz was longer than start_freq_MHz. Discarding '
                             'extra target traps.')
-            self.target_freqs_MHz = self.target_freqs_MHz[:len(self.start_freqs_MHz)]
+            self.target_freq_MHz = self.target_freq_MHz[:len(self.start_freq_MHz)]
         
         self.generate_segment_ids()
+        self.set_start_index(0)
     
     def generate_segment_ids(self):
         """Generates the potential segment ids to index segments.
@@ -89,7 +104,7 @@ class RearrangementHandler():
         due to lack of repition, which failed when scaling up to higher trap
         numbers.
         
-        Ids are ordered to prioritise the earlier traps in the `start_freqs_MHz`
+        Ids are ordered to prioritise the earlier traps in the `start_freq_MHz`
         attribute.
         
         Returns
@@ -97,39 +112,25 @@ class RearrangementHandler():
         None. Generated occupations are stored as the attribute `occupations`.
         
         """
-        occupations = [list(i) for i in itertools.product([1, 0], repeat=len(self.start_freqs_MHz))]
-        occupations = [(''.join(str(x) for x in y)) for y in occupations if sum(y) == len(self.target_freqs_MHz)]
+        occupations = [list(i) for i in itertools.product([1, 0], repeat=len(self.start_freq_MHz))]
+        occupations = [(''.join(str(x) for x in y)) for y in occupations if sum(y) == len(self.target_freq_MHz)]
         # print(occupations)
         self.occupations = occupations
+        self.num_segments = len(self.occupations)
         
-    def get_segments(self):
-        """Returned segments are structured the same as the list of segments 
-        in the `MainWindow` class.
+    def set_start_index(self,index):
+        """Sets the index that the rearrangement has started from. Allows the 
+        rearrangement handler to keep track of the used segments.
         
-        The indicies of the returned list take the following structure:
-            0:                  The initial starting segment with the traps at 
-                                `start_freqs_MHz`
-            1 -> (len(list)-3): The sweeping segments to `target_freqs_MHz` 
-                                that should be selected from when rearranging.
-            len(list)-2:        The ramping segment to take traps to 
-                                post-rearrangement amplitude.
-            len(list)-1:        The final static segment before the rest of the
-                                routine.
-                                
-        The entry of each list is another list containing the different AWG
-        channels `ActionContainer` objects.
-        
-        The returned list should be inserted at the start of the lists of 
-        other segments generated in the GUI.
-        
-        Returns
-        -------
-        list of lists of `ActionContainers`
-        
+        Parameters
+        ----------
+        index : int
+            The index to set the first segment to. Other segments are 
+            incremented from this.
+            
         """
-        
-        initial_segment = 1
-        
+        self.start_index = index
+        self.segments = list(range(index,index+len(self.occupations)))
         
     def accept_string(self,string):
         """Takes the string recieved from Pydex and converts it to a matching 
@@ -151,7 +152,7 @@ class RearrangementHandler():
         string : str
             Occupation string from Pydex. This should be a single string 
             containing only the characters '0' (unoccupied) and '1' (occupied) 
-            where traps are indexed in the same order as the `start_freqs_MHz` 
+            where traps are indexed in the same order as the `start_freq_MHz` 
             attribute.
             
         Returns
@@ -164,32 +165,32 @@ class RearrangementHandler():
         recieved_string = string
         occupied_traps = sum(int(x) for x in string)
         
-        if len(string) > len(self.start_freqs_MHz):
+        if len(string) > len(self.start_freq_MHz):
             logging.warning('The length of the string recieved is too long '
                             'for the number of starting traps. Discarding '
                             'extra bits.')
-            string = string[:len(self.start_freqs_MHz)]
-        elif len(string) < len(self.start_freqs_MHz):
+            string = string[:len(self.start_freq_MHz)]
+        elif len(string) < len(self.start_freq_MHz):
             logging.warning('The length of the string recieved is too short '
                             'for the number of starting traps. Assuming '
                             'missing bits are unoccupied.')
-            string = string + '0'*(len(self.start_freqs_MHz)-len(string))
+            string = string + '0'*(len(self.start_freq_MHz)-len(string))
         
-        if occupied_traps < len(self.target_freqs_MHz):
+        if occupied_traps < len(self.target_freq_MHz):
             logging.info('Not enough initial traps loaded for successful '
                          'rearrangement. Filling as many traps as possible.')
             for i in range(len(string)):
                 string = string[:-(i+1)] + '1'*(i+1)
-                if sum([int(x) for x in string]) == len(self.target_freqs_MHz):
+                if sum([int(x) for x in string]) == len(self.target_freq_MHz):
                     break
-        elif occupied_traps > len(self.target_freqs_MHz):
+        elif occupied_traps > len(self.target_freq_MHz):
             logging.info('Rearrangement traps overfilled. Dicarding some.')
             occupied_subtotal = 0
             for i in range(len(string)):
                 occupied_subtotal += int(string[i])
-                if occupied_subtotal == len(self.target_freqs_MHz):
+                if occupied_subtotal == len(self.target_freq_MHz):
                     break
-            string = string[:i+1] + '0'*(len(self.start_freqs_MHz)-(i+1))
+            string = string[:i+1] + '0'*(len(self.start_freq_MHz)-(i+1))
 
         logging.info('Processed recieved string {} as {}'.format(
                      recieved_string, string))
@@ -197,11 +198,31 @@ class RearrangementHandler():
         print(self.occupations)
         
         return self.occupations.index(string)
+    
+    def get_occupation_freqs(self):
+        """Returns the same information as the occupation array but instead 
+        of binary strings saying whether to use a trap, returns the actual 
+        trap positions
+        
+        Returns
+        -------
+        list of lists of floats
+            The `occupation` attribute converted into the loaded trap 
+            frequencies.
+        
+        """
+        indicies = [list(i.start() for i in re.finditer('1', x)) for x in self.occupations]
+        freqs = [[self.start_freq_MHz[i] for i in x] for x in indicies]
+        # print(self.occupations)
+        # print(indicies)
+        # print(freqs)
+        
+        return freqs
 
 if __name__ == '__main__':
     rearr_settings = {'channel':0,
-                      'start_freqs_MHz':[100,102],
-                      'target_freqs_MHz':[101],
+                      'start_freq_MHz':[100,102],
+                      'target_freq_MHz':[101],
                       'rearr_amp':0.2,
                       'static_duration_ms':1,
                       'moving_duration_ms':1,
@@ -212,8 +233,10 @@ if __name__ == '__main__':
                       'alt_amp':1
                       }
     
-    rh = RearrangementHandler(rearr_settings,None)
+    # rh = RearrangementHandler(rearr_settings,None)
+    rh = RearrangementHandler([100,102,104,503],[100,102],None)
     rh.generate_segment_ids()
     
     index = rh.accept_string('1101011111')
-    print(index)
+    
+    rh.get_occupation_freqs()

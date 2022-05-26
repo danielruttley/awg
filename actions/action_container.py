@@ -1,6 +1,7 @@
 import sys
 import inspect
 import numpy as np
+from copy import deepcopy
 
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
@@ -43,10 +44,15 @@ class ActionContainer():
         Boolean that contains whether the class has recieved an update to one
         of its parameters that means that data needs to recalculated when 
         called.
+    rearr : bool
+        Boolean used by the `MainWindow` class to track whether this action 
+        is used for rearrangement. This has to be toggled externally, no method
+        in this class will toggle this boolean.
         
     """
     
     def __init__(self,action_params,card_settings):
+        print(action_params)
         self.duration_ms = action_params['duration_ms']
         self.freq_params = action_params['freq']
         self.freq_function_name = self.freq_params.pop('function')
@@ -64,6 +70,34 @@ class ActionContainer():
         self.data = np.empty_like(self.time)
         
         self.needs_to_calculate = True
+        self.rearr = False
+        
+    def get_action_params(self):
+        """Returns a complete `action_params` dict that could be used to 
+        recreate this action container.
+        
+        The dictionary is a complete copy to ensure that the attributes of 
+        this class are not editied (note this may not be needed).
+        
+        Returns
+        -------
+        dict
+            action_params dict equal to the one used to create this 
+            `ActionContainer object.
+            
+        """
+        action_params = {}
+        action_params['duration_ms'] = self.duration_ms
+        freq_params = {'function' : self.freq_function_name}
+        amp_params = {'function' : self.amp_function_name}
+        
+        freq_params.update(self.freq_params)
+        amp_params.update(self.amp_params)
+        
+        action_params['freq'] = freq_params
+        action_params['amp'] = amp_params
+        
+        return deepcopy(action_params)
 
     def update_param(self,target_function,param,value):
         """Updates the relvant function dictionary with a new parameter value.
@@ -185,7 +219,6 @@ class ActionContainer():
         `freq_params`. This dictionary should be the kwargs for a single tone 
         (i.e. the function `self.transpose_params` should be used before 
         passing arguements to this function).
-        
         
         Parameters
         ----------
@@ -350,7 +383,7 @@ class ActionContainer():
         elif hybridicity == 0:
             return self.freq_min_jerk(start_freq_MHz,end_freq_MHz,start_phase,_time)
         else:
-            return None
+            return self.freq_min_jerk(start_freq_MHz,end_freq_MHz,start_phase,_time)
             #TODO finish this
             d = (end_freq_MHz-start_freq_MHz)
             T = _time[-1] - _time[0]
