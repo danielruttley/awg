@@ -101,24 +101,34 @@ class MainWindow(QMainWindow):
         self.name = name
 
         # if dev_mode:
-        self.tcp_client = PyClient(host='localhost',port=6830,name='AWG')
+        # self.tcp_client = PyClient(host='localhost',port=6830,name='self.name')
         # else:
-        #     self.tcp_client = PyClient(host='129.234.190.164',port=8627,name='SLM')
+        #     self.tcp_client = PyClient(host='129.234.190.164',port=8627,name='self.name')
         # self.tcp_client.start()
+        
         self.last_AWGparam_folder = '.'
         
         self.card_settings = {'active_channels':1,
-                              # 'static_duration_us':2,
                               'sample_rate_Hz':625000000,
                               'max_output_mV':100,
-                              'number_of_segments':8
+                              'number_of_segments':8,
+                              'segment_min_samples':192,
+                              'segment_step_samples':32
                               }
         
         self.rearr_settings = {'channel':0,
                                'target_freq_MHz':[101]
                                }
         
-        self.rr = None#RearrangementHandler()
+        self.amp_adjuster_settings = {'channel_0_filename':0,
+                                      'channel_0_freq_limits':[85,115],
+                                      'channel_0_amp_limits':[0,1],
+                                      'channel_1_filename':0,
+                                      'channel_1_freq_limits':[85,115],
+                                      'channel_1_amp_limits':[0,1]
+                                      }
+        
+        self.rr = None
 
         self.setWindowTitle("{} control".format(self.name))
         self.layout = QVBoxLayout()
@@ -144,14 +154,18 @@ class MainWindow(QMainWindow):
         layout = QGridLayout()
 
         self.label_awg = QLabel(self.name)
-        layout.addWidget(self.label_awg,0,0,2,1)
+        layout.addWidget(self.label_awg,0,0,2,2)
 
         self.button_card_settings = QPushButton('card settings')
         self.button_card_settings.clicked.connect(self.open_card_settings_window)
-        layout.addWidget(self.button_card_settings,0,1,1,1)
+        layout.addWidget(self.button_card_settings,0,2,1,2)
+
+        self.button_amp_adjuster_settings = QPushButton('AmpAdjuster settings')
+        self.button_amp_adjuster_settings.clicked.connect(self.open_amp_adjuster_settings_window)
+        layout.addWidget(self.button_amp_adjuster_settings,1,2,1,1)
 
         self.button_pydex_settings = QPushButton('PyDex settings')
-        layout.addWidget(self.button_pydex_settings,1,1,1,1)
+        layout.addWidget(self.button_pydex_settings,1,3,1,1)
 
         self.layout.addLayout(layout)
         self.layout.addWidget(QHLine())
@@ -901,6 +915,10 @@ class MainWindow(QMainWindow):
 
     def open_card_settings_window(self):
         self.w = CardSettingsWindow(self,self.card_settings)
+        self.w.show()    
+    
+    def open_amp_adjuster_settings_window(self):
+        self.w = AmpAdjusterSettingsWindow(self,self.amp_adjuster_settings)
         self.w.show()
 
     def get_slm_settings(self):
@@ -1705,6 +1723,52 @@ class RearrSettingsWindow(QWidget):
                 value = float(widget.text())
             new_rearr_settings[key] = value
         self.mainWindow.update_rearr_settings(new_rearr_settings)
+        
+class AmpAdjusterSettingsWindow(QWidget):
+    def __init__(self,mainWindow,rearr_settings):
+        super().__init__()
+        self.mainWindow = mainWindow
+        self.rearr_settings = rearr_settings
+        self.setWindowTitle("rearrangement settings")
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        self.layout_rearr_settings = QFormLayout()
+        for key in list(self.rearr_settings.keys()):
+            if key == 'channel':
+                widget = QComboBox()
+                widget.addItems([str(x) for x in list(range(self.mainWindow.card_settings['active_channels']))])
+                widget.setCurrentText(str(self.rearr_settings[key]))
+            else:
+                widget = QLineEdit()
+                widget.setText(str(self.rearr_settings[key]))
+                if not 'freq' in key:
+                    widget.setValidator(QDoubleValidator())
+            self.layout_rearr_settings.addRow(key, widget)
+        layout.addLayout(self.layout_rearr_settings)
+
+        self.button_save = QPushButton("Save")
+        self.button_save.clicked.connect(self.update_rearr_settings)
+        layout.addWidget(self.button_save)
+           
+    def update_rearr_settings(self):
+        new_rearr_settings = self.rearr_settings.copy()
+        for row in range(self.layout_rearr_settings.rowCount()):
+            key = self.layout_rearr_settings.itemAt(row,0).widget().text()
+            widget = self.layout_rearr_settings.itemAt(row,1).widget()
+            if key == 'channel':
+                value = int(widget.currentText())
+            elif 'freq' in key:
+                try:
+                    value = convert_str_to_list(widget.text())
+                except:
+                    logging.error('Could not evaluate {} for rearrangement setting {}'.format(widget.text(),key))
+                    return
+            else:
+                value = float(widget.text())
+            new_rearr_settings[key] = value
+        # self.mainWindow.update_rearr_settings(new_rearr_settings)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

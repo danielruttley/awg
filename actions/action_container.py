@@ -1,3 +1,4 @@
+import logging
 import sys
 import inspect
 import numpy as np
@@ -44,6 +45,16 @@ class ActionContainer():
         Boolean that contains whether the class has recieved an update to one
         of its parameters that means that data needs to recalculated when 
         called.
+    needs_to_transfer : bool
+        Boolean that contains whether this action needs to be  copied to the 
+        AWG card. It is set to True when data is calculated and should only be
+        set to False by the `AWG` class when it has transfered the data. This 
+        allows the `AWG` class to keep track of whether it needs to transfer 
+        new data to the card or not.
+        
+        When data is changed in the GUI, all segments will retransfer incase 
+        their order has changed. This flag prevents that needing to take place 
+        if a change is requested from PyDex.
     rearr : bool
         Boolean used by the `MainWindow` class to track whether this action 
         is used for rearrangement. This has to be toggled externally, no method
@@ -51,7 +62,7 @@ class ActionContainer():
         
     """
     
-    def __init__(self,action_params,card_settings):
+    def __init__(self,action_params,card_settings,aa=None):
         print(action_params)
         self.duration_ms = action_params['duration_ms']
         self.freq_params = action_params['freq']
@@ -70,6 +81,7 @@ class ActionContainer():
         self.data = np.empty_like(self.time)
         
         self.needs_to_calculate = True
+        self.needs_to_transfer = True
         self.rearr = False
         
     def get_action_params(self):
@@ -176,7 +188,15 @@ class ActionContainer():
         """Generates a `numpy` array containing the time steps (in ms) for the 
         action. This array starts from zero and runs to the `duration_ms` 
         attribute.
-
+        
+        The time is slightly modified to ensure that it contains the correct 
+        number of points in the segment. This should be a multiple of 
+        card_settings['segment_step_samples'].+ 1 (as the first point of all 
+        calculated data is dropped when sending the sample to the card to avoid
+        repeating the same time point twice.)
+        
+        The time is also set longer than the minimum segment time in 
+        card_settings['segment_min_samples'].
 
         Returns
         -------
@@ -184,12 +204,26 @@ class ActionContainer():
 
         """
         time_step = 1/self.card_settings['sample_rate_Hz']
-        self.time = np.arange(0,self.duration_ms*1e-3,time_step)
+        num_samples = round(self.duration_ms*1e-3*self.card_settings['sample_rate_Hz']/self.card_settings['segment_step_samples'])*self.card_settings['segment_step_samples']
+        if num_samples < self.card_settings['segment_min_samples']:
+            logging.error('Requested duration {} ms has too few samples to '
+                          'make a valid sample. Setting number of samples '
+                          'minimum {}'.format(self.duration_ms,
+                                              self.card_settings['segment_min_samples']))
+            num_samples = self.card_settings['segment_min_samples']
+        print(num_samples)
+        num_samples = int(num_samples)
+        print(num_samples)
+        self.duration_ms = num_samples*time_step*1e3
+        self.time = np.linspace(0,self.duration_ms*1e-3,num_samples+1)
 
     def calculate(self):
         """
         Calculates the action data to send to the AWG. Data is only 
         regenerated if the boolean attribute `needs_to_calculate` is True.
+        
+        The first data point of the data is dropped to ensure phase continuity 
+        with the previous segment.
 
         Returns
         -------
@@ -212,7 +246,9 @@ class ActionContainer():
                 phase_data = self.calculate_phase(freq_data,tone_freq_params['start_phase'])
                 
                 self.data += amp_data*np.sin(phase_data)*1e-9
+            self.data = self.data[1:]
             self.needs_to_calculate = False
+            self.needs_to_transfer = True
 
     def calculate_freq(self,freq_params):
         """Calculates the frequency profile with the kwargs in the arguement
@@ -296,7 +332,7 @@ class ActionContainer():
         
     #     return self.action
     
-    def get_autoplot_traces(self,num_points=50):
+    def get_autoplot_traces(self,num_points=50,amp_adjust=False):
         """Returns samples of the amplitude and frequency profiles for the 
         autoplotter to use. Doesn't return the complete profile to make the
         plotting more lightweight.
@@ -327,6 +363,10 @@ class ActionContainer():
         for profile_freq_params,profile_amp_params in zip(self.transpose_params(self.freq_params),self.transpose_params(self.amp_params)):
             freq_profiles.append(self.freq_function(**profile_freq_params,_time=time))
             amp_profiles.append(self.amp_function(**profile_amp_params,_time=time))
+        
+        if amp_adjust:
+            for i, (freq_profile,amp_profile) in enumerate(zip(freq_profiles,amp_profiles)):
+                amp_profiles[i] = self.aa.adjuster(freq_profile,amp_profile)
                 
         return freq_profiles, amp_profiles
     
@@ -419,3 +459,19 @@ class ActionContainer():
         drop_idx = np.where(np.abs(_time-duration/2)<((drop_time_us*1e-6)/2))
         amp[drop_idx] = drop_amp
         return amp
+    
+if __name__ == '__main__':
+    card_settings = {'active_channels':1,
+                     'sample_rate_Hz':625000000,
+                     'max_output_mV':100,
+                     'number_of_segments':8,
+                     'segment_min_samples':192,
+                     'segment_step_samples':32
+                     }
+    action_params = {'duration_ms' : 1,
+                     'freq' : {'function' : 'static',
+                               'start_freq_MHz': [100],
+                               'start_phase' : [0]},
+                     'amp' : {'function' : 'static',
+                              'start_amp': [1]}}
+    action = ActionContainer(action_params,card_settings)
