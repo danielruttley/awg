@@ -5,7 +5,6 @@ import sys
 import os
 import numpy as np
 os.system("color")
-import inspect
 
 #from qtpy.QtCore import QThread,Signal,Qt
 from qtpy.QtCore import Qt
@@ -13,24 +12,25 @@ from qtpy.QtWidgets import (QApplication,QMainWindow,QVBoxLayout,QWidget,
                             QAction,QListWidget,QFormLayout,QComboBox,QLineEdit,
                             QTextEdit,QPushButton,QFileDialog,QAbstractItemView,
                             QGridLayout,QLabel,QHBoxLayout,QCheckBox,QFrame,QListWidgetItem)
-from qtpy.QtGui import QIcon,QIntValidator,QDoubleValidator,QColor,QFont
+from qtpy.QtGui import QIcon,QColor
 
 import pyqtgraph as pg
 
 from . import qrc_resources
 from .networking.client import PyClient
 
+from .helpers import QHLine, QVLine
+from .secondary_windows import (CardSettingsWindow, SegmentCreationWindow,
+                                StepCreationWindow, RearrSettingsWindow,
+                                AmpAdjusterSettingsWindow)
+
 if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from actions import ActionContainer
+from actions import ActionContainer, AmpAdjuster2D
 from rearrangement import RearrangementHandler
 
-freq_functions = [x[5:] for x in dir(ActionContainer) if x[:5] == 'freq_']
-amp_functions = [x[4:] for x in dir(ActionContainer) if x[:4] == 'amp_']
-
 num_plot_points = 100
-max_num_segments = 10 # actual value is 2**(max_num_segments)
 
 color_cs = '#f5b7a6'
 color_rb = '#bdd7ee'
@@ -39,27 +39,6 @@ color_rearr_off = '#e04848'
 color_rearr_on = '#05a815'
 color_rearr_on_background = '#92f09b'
 color_needs_to_calculate = '#dfbbf0'
-
-class QHLine(QFrame):
-    """Helper widget to draw horizontal lines in the GUI."""
-    def __init__(self):
-        super(QHLine, self).__init__()
-        self.setFrameShape(QFrame.HLine)
-        self.setFrameShadow(QFrame.Sunken)
-
-class QVLine(QFrame):
-    """Helper widget to draw vertical lines in the GUI."""
-    def __init__(self):
-        super(QVLine, self).__init__()
-        self.setFrameShape(QFrame.VLine)
-        self.setFrameShadow(QFrame.Sunken)
-        
-def convert_str_to_list(string):
-    string = str(string)
-    string = string.replace('[','')
-    string = string.replace(']','')
-    string = '['+string+']'
-    return eval(string)
 
 class MainWindow(QMainWindow):
     """Acts as controller for the AWG program.
@@ -120,15 +99,24 @@ class MainWindow(QMainWindow):
                                'target_freq_MHz':[101]
                                }
         
-        self.amp_adjuster_settings = {'channel_0_filename':0,
-                                      'channel_0_freq_limits':[85,115],
-                                      'channel_0_amp_limits':[0,1],
-                                      'channel_1_filename':0,
-                                      'channel_1_freq_limits':[85,115],
-                                      'channel_1_amp_limits':[0,1]
-                                      }
+        amp_adjuster_settings = [{'enabled':True,
+                                  'non_adjusted_amp_mV':100,
+                                  'filename':'Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_H_calFile_17.02.2022.txt',
+                                  'freq_limit_1_MHz':85,
+                                  'freq_limit_2_MHz':110,
+                                  'amp_limit_1':0,
+                                  'amp_limit_2':1},
+                                 {'enabled':True,
+                                  'non_adjusted_amp_mV':100,
+                                  'filename':'Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_V_calFile_17.02.2022.txt',
+                                  'freq_limit_1_MHz':85,
+                                  'freq_limit_2_MHz':115,
+                                  'amp_limit_1':0,
+                                  'amp_limit_2':1},
+                                 ]
         
         self.rr = None
+        self.amp_adjusters = [None,None]
 
         self.setWindowTitle("{} control".format(self.name))
         self.layout = QVBoxLayout()
@@ -148,7 +136,7 @@ class MainWindow(QMainWindow):
         self.segments = []
         self.steps = []
         
-        self.plot_autoplot_graphs()
+        self.set_amp_adjuster_settings(amp_adjuster_settings)
 
     def _create_awg_header(self):
         layout = QGridLayout()
@@ -331,6 +319,10 @@ class MainWindow(QMainWindow):
         self.button_autoplot_condense_rearr = QCheckBox("Condense rearrange segments")
         self.button_autoplot_condense_rearr.clicked.connect(self.plot_autoplot_graphs)
         layout_autoplot_options.addWidget(self.button_autoplot_condense_rearr)
+        
+        self.button_autoplot_amp_mV = QCheckBox("Show amplitude in mV")
+        self.button_autoplot_amp_mV.clicked.connect(self.plot_autoplot_graphs)
+        layout_autoplot_options.addWidget(self.button_autoplot_amp_mV)
 
         self.layout_autoplotter.addLayout(layout_autoplot_options)
         
@@ -560,7 +552,7 @@ class MainWindow(QMainWindow):
         for channel in range(self.card_settings['active_channels']):
             channel_params = {'duration_ms':segment_params['duration_ms']}
             channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
-            action = ActionContainer(channel_params,self.card_settings)
+            action = ActionContainer(channel_params,self.card_settings,self.amp_adjusters[channel])
             segment.append(action)
         if editing_segment is None:
             try:
@@ -660,7 +652,7 @@ class MainWindow(QMainWindow):
                             else:
                                 amp_params[key] = [amp_params[key][0]]*len(target_freq_MHz)
                         # print(rearr_action_params)
-                        action = ActionContainer(rearr_action_params,self.card_settings)
+                        action = ActionContainer(rearr_action_params,self.card_settings,self.amp_adjusters[channel])
                         action.rearr = True
                         rr_seg.append(action)
                     else:
@@ -918,8 +910,51 @@ class MainWindow(QMainWindow):
         self.w.show()    
     
     def open_amp_adjuster_settings_window(self):
-        self.w = AmpAdjusterSettingsWindow(self,self.amp_adjuster_settings)
+        amp_adjuster_settings = []
+        for adjuster in self.amp_adjusters:
+            amp_adjuster_settings.append(adjuster.get_settings())
+        self.w = AmpAdjusterSettingsWindow(self,amp_adjuster_settings)
         self.w.show()
+        
+    def set_amp_adjuster_settings(self,new_amp_adjuster_settings):
+        """Accepts new amp adjuster settings and passes them through to the 
+        `AmpAdjuster2D` objects to update their parameters.
+        
+        Once the AmpAdjuster settings update is complete, all segment 
+        `ActionContainers` are told that they will need to recalculate 
+        before data is sent to the card (this may not be necessary if that 
+        channel's AmpAdjuster is not updated, but skipped making a check 
+        like this for simplicity).
+        
+        Parameters
+        ----------
+        new_amp_adjuster_settings : list of dicts
+            A list of dicts containing the parameters of the AmpAdjusters to 
+            set. The parameters should be ordered in the same order as the 
+            AWG channels. Each dict is passed through to the corresponding 
+            AmpAdjuster.
+            
+            For the required dictonary keys, see the Attributes section of the
+            `AmpAdjuster2D` class docstring.
+        
+        """
+        if len(new_amp_adjuster_settings) < len(self.amp_adjusters):
+            logging.error('Less AmpAdjuster settings are specified that the '
+                          'number of AmpAdjusters ({}). Cancelling the new '
+                          'settings.'.format(len(self.amp_adjusters)))
+            return
+        for i,(settings,adjuster) in enumerate(zip(new_amp_adjuster_settings,self.amp_adjusters)):
+            if adjuster == None:
+                self.amp_adjusters[i] = AmpAdjuster2D(settings)
+            else:
+                adjuster.update_settings(settings)
+        self.w = None
+        for segment in self.segments:
+            for action in segment:
+                action.needs_to_calculate = True
+        
+        self.segment_list_update()
+        self.plot_autoplot_graphs()
 
     def get_slm_settings(self):
         return self.slm_settings
@@ -1243,6 +1278,10 @@ class MainWindow(QMainWindow):
                 amp_plot = self.amp_plots[channel]
                 freq_plot.clear()
                 amp_plot.clear()
+                if self.button_autoplot_amp_mV.isChecked():
+                    amp_plot.setLabel(axis='left', text='amplitude (mV)')
+                else:
+                    amp_plot.setLabel(axis='left', text='amplitude')
                 duration_xlabels = {}
                 segment_xlabels = {}
                 current_pos = 0
@@ -1261,7 +1300,7 @@ class MainWindow(QMainWindow):
                                     amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
                                                                                 brush=color_rearr_on_background,movable=False))
                             action = self.segments[segment][channel]
-                            freqs, amps = action.get_autoplot_traces()
+                            freqs, amps = action.get_autoplot_traces(show_amp_in_mV = self.button_autoplot_amp_mV.isChecked())
                             xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
                             for j,(freq,amp) in enumerate(zip(freqs,amps)):
                                 freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2))
@@ -1328,447 +1367,7 @@ class MainWindow(QMainWindow):
                 self.steps[selected_step]['after_step'] = 'continue'
             self.step_list_update()
 
-class CardSettingsWindow(QWidget):
-    def __init__(self,mainWindow,card_settings):
-        super().__init__()
-        self.mainWindow = mainWindow
-        self.card_settings = card_settings
-        self.setWindowTitle("card settings")
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        self.layout_card_settings = QFormLayout()
-        for key in list(self.card_settings.keys()):
-            if key == 'active_channels':
-                widget = QComboBox()
-                widget.addItems(['1','2'])
-                widget.setCurrentText(str(self.card_settings[key]))
-            elif key == 'number_of_segments':
-                widget = QComboBox()
-                widget.addItems([str(2**x) for x in list(range(max_num_segments+1))])
-                widget.setCurrentText(str(self.card_settings[key]))
-            else:
-                widget = QLineEdit()
-                widget.setText(str(self.card_settings[key]))
-                widget.setValidator(QDoubleValidator())
-            self.layout_card_settings.addRow(key, widget)
-        layout.addLayout(self.layout_card_settings)
-
-        self.button_save = QPushButton("Save")
-        self.button_save.clicked.connect(self.update_card_settings)
-        layout.addWidget(self.button_save)
-           
-    def update_card_settings(self):
-        new_card_settings = self.card_settings.copy()
-        for row in range(self.layout_card_settings.rowCount()):
-            key = self.layout_card_settings.itemAt(row,0).widget().text()
-            widget = self.layout_card_settings.itemAt(row,1).widget()
-            if key in ['active_channels','number_of_segments']:
-                value = int(widget.currentText())
-            else:
-                value = float(widget.text())
-            new_card_settings[key] = value
-        self.mainWindow.update_card_settings(new_card_settings)
-
-    def get_card_settings(self):
-        return self.card_settings
-
-class SegmentCreationWindow(QWidget):
-    def __init__(self,main_window,editing_segment=None):
-        """
-        Container window for adding/editing segments. Most of the actual 
-        functionality is handled by the `SegmentChannelWidget` class which 
-        can be iterated if using multiple channels.
-
-        Parameters
-        ----------
-        main_window : MainWindow
-            The parent window of this class. Passed through to allow this 
-            window to close itself when the Add/Edit button is pressed.
-        editing_segment : None or int, optional
-            The segment currently being edited. The default is None, and will
-            cause the dialogue box to add a new segment instead.
-
-        Returns
-        -------
-        None. The `main_window.segment_add` or `main_window.segment_edit` 
-        function is called to save the segment parameters.
-
-        """
-        super().__init__()
-        self.main_window = main_window
-        # if edit_holo is None:
-        self.setWindowTitle("New segment")
-        self.editing_segment = editing_segment
-        
-        if self.editing_segment is not None:
-            self.setWindowTitle("Edit segment {}".format(self.editing_segment))
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        layout_duration = QFormLayout()
-        self.box_duration = QLineEdit()
-        self.box_duration.setValidator(QDoubleValidator())
-        if self.editing_segment is not None:
-            self.box_duration.setText(str(self.main_window.segments[self.editing_segment][0].duration_ms))
-        else:
-            self.box_duration.setText(str(1))
-            
-        layout_duration.addRow('duration_ms', self.box_duration)
-        layout.addLayout(layout_duration)
-
-        self.channel_widgets = [SegmentChannelWidget(i,self.main_window,self.editing_segment) for i in range(main_window.card_settings['active_channels'])]
-
-        for channel_widget in self.channel_widgets:
-            layout.addWidget(QHLine())
-            layout.addWidget(channel_widget)
-
-        if self.editing_segment is not None:
-            self.button_segment_add = QPushButton("Edit")
-        else:
-            self.button_segment_add = QPushButton("Add")
-        self.button_segment_add.clicked.connect(self.segment_add)
-        layout.addWidget(QHLine())
-        layout.addWidget(self.button_segment_add)
-    
-    def segment_add(self):
-        """Collect the parameters from the `SegmentChannelWidget` objects 
-        before submitting them back to the `MainWindow` parent object.
-        
-        """
-        segment_params = {}
-        segment_params['duration_ms'] = float(self.box_duration.text())
-        success = True
-        for channel_widget in self.channel_widgets:
-            index = channel_widget.channel_index
-
-            channel_params = {}
-            channel_success, channel_params['freq'], channel_params['amp'] = channel_widget.get_params()
-
-            segment_params['Ch{}'.format(index)] = channel_params
-            
-            if not channel_success:
-                success = False
-        
-        if success:
-            self.main_window.segment_add(segment_params,self.editing_segment)
-
-class SegmentChannelWidget(QWidget):
-    def __init__(self,channel_index,main_window,editing):
-        """Widget for defining the parameters of a segment for the channel 
-        defined by `channel_index`.
-        
-
-        Parameters
-        ----------
-        channel_index : int
-            Index of the channel that this object is setting the parameters of.
-        main_window : MainWindow
-            The `MainWindow` object of the GUI (the double parent of this 
-            object). This is passed through to allow this window to access the
-            segment actions and allow the current parameters to be read (but 
-            NOT written; this is handled by the `main_window` when parameters
-            are passed back via this objects `SegmentCreationWindow` parent).
-        editing : None or int
-            The segment currently being edited. None will cause the parameters
-            to be set to their default values, whilst int will autopopulate the
-            parameters from the relevant `ActionContainer` object if the 
-            function is correct.
-
-        Returns
-        -------
-        None.
-
-        """
-        super().__init__()
-        self.channel_index = channel_index
-        self.main_window = main_window
-        self.editing = editing
-        print(self.editing)
-        
-        if self.editing is not None:
-            self.segment = self.main_window.segments[self.editing][self.channel_index]
-        else:
-            self.segment = None
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        layout.addWidget(QLabel('<h3>Channel {}</h3>'.format(self.channel_index)))
-
-        layout.addWidget(QLabel('<h4>Frequency</h4>'))
-        self.box_freq_function = QComboBox()
-        self.box_freq_function.addItems(freq_functions)
-        if self.editing is not None:
-            self.box_freq_function.setCurrentText(self.segment.freq_function_name)
-        else:
-            self.box_freq_function.setCurrentText('static')
-        self.box_freq_function.currentTextChanged.connect(self.update_freq_arguments)
-        layout.addWidget(self.box_freq_function)
-
-        self.layout_freq_params = QFormLayout()
-        layout.addLayout(self.layout_freq_params)
-
-        layout.addWidget(QLabel('<h4>Amplitude</h4>'))
-        self.box_amp_function = QComboBox()
-        self.box_amp_function.addItems(amp_functions)
-        if self.editing is not None:
-            self.box_amp_function.setCurrentText(self.segment.amp_function_name)
-        else:
-            self.box_amp_function.setCurrentText('static')
-        self.box_amp_function.currentTextChanged.connect(self.update_amp_arguments)
-        layout.addWidget(self.box_amp_function)
-
-        self.layout_amp_params = QFormLayout()
-        layout.addLayout(self.layout_amp_params)
-
-        self.update_freq_arguments()
-        self.update_amp_arguments()
-    
-    def update_freq_arguments(self):
-        self.clear_freq_params()
-        freq_function = self.box_freq_function.currentText()
-        if (self.editing is not None) and (freq_function == self.segment.freq_function_name):
-            arguments = self.segment.freq_params.keys()
-            defaults = self.segment.freq_params.values()
-        else:
-            arguments,_,_,defaults = inspect.getfullargspec(eval('ActionContainer.freq_'+freq_function))[:4]
-        if len(arguments) != len(defaults):
-            pad = ['']*(len(arguments)-len(defaults))
-            defaults = pad + list(defaults)
-        card_settings = self.main_window.card_settings
-
-        for argument,default in zip(arguments,defaults):
-            if default != '':
-                if (argument not in card_settings.keys()) and (argument[0] != '_'):
-                    self.layout_freq_params.addRow(argument, QLineEdit())
-                    text_box = self.layout_freq_params.itemAt(self.layout_freq_params.rowCount()-1, 1).widget()
-                    text_box.returnPressed.connect(self.return_freq_params)
-                    # if (self.editing == True) and (current == self.current_name):
-                    #     text_box.setText(str(self.current_params[argument]))
-                    text_box.setText(str(default))
-        # self.holoDocBox.setText(self.function.__doc__.split('Returns')[0])
-
-    def clear_freq_params(self):
-        for i in range(self.layout_freq_params.rowCount()):
-            self.layout_freq_params.removeRow(0)
-
-    def update_amp_arguments(self):
-        self.clear_amp_params()
-        amp_function = self.box_amp_function.currentText()
-        if (self.editing is not None) and (amp_function == self.segment.amp_function_name):
-            arguments = self.segment.amp_params.keys()
-            defaults = self.segment.amp_params.values()
-        else:
-            arguments,_,_,defaults = inspect.getfullargspec(eval('ActionContainer.amp_'+amp_function))[:4]
-        if len(arguments) != len(defaults):
-            pad = ['']*(len(arguments)-len(defaults))
-            defaults = pad + list(defaults)
-        card_settings = self.main_window.card_settings
-
-        for argument,default in zip(arguments,defaults):
-            if default != '':
-                if (argument not in card_settings.keys()) and (argument[0] != '_'):
-                    self.layout_amp_params.addRow(argument, QLineEdit())
-                    text_box = self.layout_amp_params.itemAt(self.layout_amp_params.rowCount()-1, 1).widget()
-                    text_box.returnPressed.connect(self.return_amp_params)
-                    # if (self.editing == True) and (current == self.current_name):
-                    #     text_box.setText(str(self.current_params[argument]))
-                    text_box.setText(str(default))
-
-    def clear_amp_params(self):
-        for i in range(self.layout_amp_params.rowCount()):
-            self.layout_amp_params.removeRow(0)
-
-    def return_freq_params(self):
-        pass
-
-    def return_amp_params(self):
-        pass
-
-    def get_params(self):
-        success = True
-        freq_params = {}
-        freq_params['function'] = self.box_freq_function.currentText()
-        
-        for row in range(self.layout_freq_params.rowCount()):
-            key = self.layout_freq_params.itemAt(row,0).widget().text()
-            widget = self.layout_freq_params.itemAt(row,1).widget()
-            value = widget.text()
-            try:
-                value = convert_str_to_list(value)
-            except Exception:
-                logging.error('Failed to evaluate {} for amplitude parameter {}'.format(value,key))
-                widget.setStyleSheet('background-color: red')
-                success = False
-            else:
-                widget.setStyleSheet('')
-                freq_params[key] = value
-        
-        amp_params = {}
-        amp_params['function'] = self.box_amp_function.currentText()
-        
-        for row in range(self.layout_amp_params.rowCount()):
-            key = self.layout_amp_params.itemAt(row,0).widget().text()
-            widget = self.layout_amp_params.itemAt(row,1).widget()
-            value = widget.text()
-            try:
-                value = convert_str_to_list(value)
-            except Exception:
-                logging.error('Failed to evaluate {} for amplitude parameter {}'.format(value,key))
-                widget.setStyleSheet('background-color: red')
-                success = False
-            else:
-                widget.setStyleSheet('')
-                amp_params[key] = value
-
-        return success, freq_params, amp_params
-
-class StepCreationWindow(QWidget):
-    def __init__(self,mainWindow):
-        super().__init__()
-        self.mainWindow = mainWindow
-        self.setWindowTitle("New step")
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        step_settings = ['segment','number_of_loops','after_step','rearr']
-        after_step_options = ['continue','loop_until_trigger']
-        rearr_options = ['False','True']
-
-        self.layout_step_settings = QFormLayout()
-
-        for key in step_settings:
-            if key == 'after_step':
-                widget = QComboBox()
-                widget.addItems(after_step_options)
-                widget.setCurrentText(after_step_options[0])
-            elif key == 'rearr':
-                widget = QComboBox()
-                widget.addItems(rearr_options)
-                widget.setCurrentText(after_step_options[0])
-            else:
-                widget = QLineEdit()
-                if key == 'number_of_loops':
-                    widget.setText(str(1))
-                else:
-                    widget.setText(str(0))
-                widget.setValidator(QIntValidator())
-            self.layout_step_settings.addRow(key, widget)
-        layout.addLayout(self.layout_step_settings)
-
-        self.button_save = QPushButton("Add")
-        self.button_save.clicked.connect(self.update_card_settings)
-        layout.addWidget(self.button_save)
-           
-    def update_card_settings(self):
-        step_params = {}
-        for row in range(self.layout_step_settings.rowCount()):
-            key = self.layout_step_settings.itemAt(row,0).widget().text()
-            widget = self.layout_step_settings.itemAt(row,1).widget()
-            if key == 'after_step':
-                value = widget.currentText()
-            elif key == 'rearr':
-                value = eval(widget.currentText())
-            else:
-                value = int(widget.text())
-            step_params[key] = value
-        self.mainWindow.step_add(step_params)
-
-class RearrSettingsWindow(QWidget):
-    def __init__(self,mainWindow,rearr_settings):
-        super().__init__()
-        self.mainWindow = mainWindow
-        self.rearr_settings = rearr_settings
-        self.setWindowTitle("rearrangement settings")
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        self.layout_rearr_settings = QFormLayout()
-        for key in list(self.rearr_settings.keys()):
-            if key == 'channel':
-                widget = QComboBox()
-                widget.addItems([str(x) for x in list(range(self.mainWindow.card_settings['active_channels']))])
-                widget.setCurrentText(str(self.rearr_settings[key]))
-            else:
-                widget = QLineEdit()
-                widget.setText(str(self.rearr_settings[key]))
-                if not 'freq' in key:
-                    widget.setValidator(QDoubleValidator())
-            self.layout_rearr_settings.addRow(key, widget)
-        layout.addLayout(self.layout_rearr_settings)
-
-        self.button_save = QPushButton("Save")
-        self.button_save.clicked.connect(self.update_rearr_settings)
-        layout.addWidget(self.button_save)
-           
-    def update_rearr_settings(self):
-        new_rearr_settings = self.rearr_settings.copy()
-        for row in range(self.layout_rearr_settings.rowCount()):
-            key = self.layout_rearr_settings.itemAt(row,0).widget().text()
-            widget = self.layout_rearr_settings.itemAt(row,1).widget()
-            if key == 'channel':
-                value = int(widget.currentText())
-            elif 'freq' in key:
-                try:
-                    value = convert_str_to_list(widget.text())
-                except:
-                    logging.error('Could not evaluate {} for rearrangement setting {}'.format(widget.text(),key))
-                    return
-            else:
-                value = float(widget.text())
-            new_rearr_settings[key] = value
-        self.mainWindow.update_rearr_settings(new_rearr_settings)
-        
-class AmpAdjusterSettingsWindow(QWidget):
-    def __init__(self,mainWindow,rearr_settings):
-        super().__init__()
-        self.mainWindow = mainWindow
-        self.rearr_settings = rearr_settings
-        self.setWindowTitle("rearrangement settings")
-
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-
-        self.layout_rearr_settings = QFormLayout()
-        for key in list(self.rearr_settings.keys()):
-            if key == 'channel':
-                widget = QComboBox()
-                widget.addItems([str(x) for x in list(range(self.mainWindow.card_settings['active_channels']))])
-                widget.setCurrentText(str(self.rearr_settings[key]))
-            else:
-                widget = QLineEdit()
-                widget.setText(str(self.rearr_settings[key]))
-                if not 'freq' in key:
-                    widget.setValidator(QDoubleValidator())
-            self.layout_rearr_settings.addRow(key, widget)
-        layout.addLayout(self.layout_rearr_settings)
-
-        self.button_save = QPushButton("Save")
-        self.button_save.clicked.connect(self.update_rearr_settings)
-        layout.addWidget(self.button_save)
-           
-    def update_rearr_settings(self):
-        new_rearr_settings = self.rearr_settings.copy()
-        for row in range(self.layout_rearr_settings.rowCount()):
-            key = self.layout_rearr_settings.itemAt(row,0).widget().text()
-            widget = self.layout_rearr_settings.itemAt(row,1).widget()
-            if key == 'channel':
-                value = int(widget.currentText())
-            elif 'freq' in key:
-                try:
-                    value = convert_str_to_list(widget.text())
-                except:
-                    logging.error('Could not evaluate {} for rearrangement setting {}'.format(widget.text(),key))
-                    return
-            else:
-                value = float(widget.text())
-            new_rearr_settings[key] = value
-        # self.mainWindow.update_rearr_settings(new_rearr_settings)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

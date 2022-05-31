@@ -59,10 +59,19 @@ class ActionContainer():
         Boolean used by the `MainWindow` class to track whether this action 
         is used for rearrangement. This has to be toggled externally, no method
         in this class will toggle this boolean.
+    amp_adjuster : AmpAdjuster2D
+        The AmpAdjuster for this action_container. This is a shared object 
+        between all ActionContainers of the same channel. It converts the 
+        desired optical power into mV to be sent to the AWG.
+        
+        All data to be sent to the card should be passed through to this 
+        AmpAdjuster even if amplitude adjusting behaviour is not desired; the 
+        AmpAdjuster will handle this and return the same amplitude for all 
+        frequencies (scaled by its `non_adjusted_amp_mV` attribute). 
         
     """
     
-    def __init__(self,action_params,card_settings,aa=None):
+    def __init__(self,action_params,card_settings,amp_adjuster):
         print(action_params)
         self.duration_ms = action_params['duration_ms']
         self.freq_params = action_params['freq']
@@ -79,6 +88,8 @@ class ActionContainer():
 
         self.calculate_time()
         self.data = np.empty_like(self.time)
+        
+        self.amp_adjuster = amp_adjuster
         
         self.needs_to_calculate = True
         self.needs_to_transfer = True
@@ -232,9 +243,8 @@ class ActionContainer():
 
         """
         
-        # TODO: Convert data to mV to send to card and add amp_adjust.
-        # Currently all amplitude data is scaled by 1e-9 just to be safe, but
-        # this should be removed in the final version when testing with the card.
+        # TODO: Currently all amplitude data is scaled by 1e-9 just to be safe
+        #       but this should evenutally be removed.
         
         if self.needs_to_calculate:
             self.data = np.zeros_like(self.time)
@@ -244,8 +254,9 @@ class ActionContainer():
                 amp_data = self.amp_function(**tone_amp_params)
                 
                 phase_data = self.calculate_phase(freq_data,tone_freq_params['start_phase'])
+                amp_data_mV = self.amp_adjuster.adjuster(freq_data,amp_data)
                 
-                self.data += amp_data*np.sin(phase_data)*1e-9
+                self.data += amp_data_mV*np.sin(phase_data)*1e-9
             self.data = self.data[1:]
             self.needs_to_calculate = False
             self.needs_to_transfer = True
@@ -332,7 +343,7 @@ class ActionContainer():
         
     #     return self.action
     
-    def get_autoplot_traces(self,num_points=50,amp_adjust=False):
+    def get_autoplot_traces(self,num_points=50,show_amp_in_mV=True):
         """Returns samples of the amplitude and frequency profiles for the 
         autoplotter to use. Doesn't return the complete profile to make the
         plotting more lightweight.
@@ -364,9 +375,9 @@ class ActionContainer():
             freq_profiles.append(self.freq_function(**profile_freq_params,_time=time))
             amp_profiles.append(self.amp_function(**profile_amp_params,_time=time))
         
-        if amp_adjust:
+        if show_amp_in_mV:
             for i, (freq_profile,amp_profile) in enumerate(zip(freq_profiles,amp_profiles)):
-                amp_profiles[i] = self.aa.adjuster(freq_profile,amp_profile)
+                amp_profiles[i] = self.amp_adjuster.adjuster(freq_profile,amp_profile)
                 
         return freq_profiles, amp_profiles
     

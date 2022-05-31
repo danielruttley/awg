@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import time
 import json
@@ -11,27 +12,76 @@ class AmpAdjuster2D():
     Once initialised, the main functionality of the class is accessed with the
     `adjuster` method.
     
+    Attributes
+    ----------
+    calibration_filename : str
+        The filename that the calibration should be loaded from
+    freq_limits_MHz: list of floats
+        List in the format [min_freq,max_freq] that the interpolation 
+        should be performed over. A wider frequency range will reduce the 
+        maximum optical power.
+    power_limits: list of floats
+        List in the format [min_power,max_power] that the interpolation 
+        should be performed over.
+    
     """
     
-    def __init__(self, calibration_filename, freq_limits_MHz, power_limits):
+    def __init__(self, settings):
         """2D amp adjuster class for handling the frequency and optical power 
         to RF power (mV) conversion.
         
-        calibration_filename : str
-            The filename that the calibration should be loaded from
-        freq_limits_MHz: list of floats
-            List in the format [min_freq,max_freq] that the interpolation 
-            should be performed over. A wider frequency range will reduce the 
-            maximum optical power.
-        power_limits: list of floats
-            List in the format [min_power,max_power] that the interpolation 
-            should be performed over.
+        Parameters
+        ----------
+        settings : dict
+            Settings dictonary for the AmpAdjuster. This should contain the 
+            AmpAdjuster attributes to set (see class docstring).
+
         """
         
-        fs = np.linspace(*freq_limits_MHz,100)
-        power = np.linspace(*power_limits,200)
+        self.update_settings(settings)
         
-        self.calibration = self.load_calibration(calibration_filename,fs,power)
+    def update_settings(self,settings):
+        for key,value in settings.items():
+            setattr(self,key,value)
+        
+        fs = np.linspace(self.freq_limit_1_MHz,self.freq_limit_2_MHz,100)
+        power = np.linspace(self.amp_limit_1,self.amp_limit_2,200)
+        
+        try:     
+            self.calibration = self.load_calibration(self.filename,fs,power)
+        except FileNotFoundError:
+            self.enabled = False
+            logging.error('Calibration file {} not found. Amplitudes will not '
+                          'be frequency adjusted by this '
+                          'AmpAdjuster.'.format(self.filename))
+        except json.decoder.JSONDecodeError:
+            self.enabled = False
+            logging.error('Failed to decode calibration file {}. Is the '
+                          'format correct? Amplitudes will not be frequency '
+                          'adjusted by this AmpAdjuster.'.format(self.filename))
+            
+    def get_settings(self):
+        """Compiles and returns the settings dictionary that specifies the 
+        behaviour of this AmpAdjuster.
+        
+        This is the dictionary that is displayed in the 
+        `AmpAdjusterSettingsWindow` when the AmpAdjuster settings are 
+        changed.
+        
+        Returns
+        -------
+        dict
+            Dictionary containing the attributes of this AmpAdjuster that can 
+            be used to recreate it.
+        """
+        
+        attributes = ['enabled','filename','freq_limit_1_MHz',
+                      'freq_limit_2_MHz','amp_limit_1','amp_limit_2',
+                      'non_adjusted_amp_mV']
+        settings = {}
+        for attribute in attributes:
+            settings[attribute] = getattr(self,attribute)
+        return settings
 
     def load_calibration(self, filename, fs = np.linspace(135,190,150), power = np.linspace(0,1,100)):
         """Convert saved diffraction efficiency data into a 2D freq/amp calibration"""
@@ -79,14 +129,25 @@ class AmpAdjuster2D():
             List of optical powers to use. Each should be paired with the 
             corresponding index in `freqs_MHz`.
         """
-        cal = self.calibration
-        return cal.ev(optical_powers, freqs_MHz)
+        if self.enabled:
+            cal = self.calibration
+            return cal.ev(optical_powers, freqs_MHz)
+        else:
+            return optical_powers*self.non_adjusted_amp_mV
 
 if __name__ == '__main__':
     fdir = r'Z:\Tweezer\Experimental\Setup and characterisation\Settings and calibrations\tweezer calibrations\AWG calibrations'
     filename = fdir + r'\814_V_calFile_17.02.2022.txt'
     
-    aa = AmpAdjuster2D(filename,[85,115],[0,1])
+    settings = {'enabled':True,
+                'non_adjusted_amp_mV':100,
+                'filename':filename,
+                'freq_limit_1_MHz':85,
+                'freq_limit_2_MHz':115,
+                'amp_limit_1':0,
+                'amp_limit_2':1}
+    
+    aa = AmpAdjuster2D(settings)
     start = time.time()
     rf_powers = aa.adjuster([101.375,101],[1,1])
     print(time.time()-start)
