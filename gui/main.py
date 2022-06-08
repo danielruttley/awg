@@ -42,7 +42,6 @@ color_needs_to_calculate = '#dfbbf0'
 
 class MainWindow(QMainWindow):
     """Acts as controller for the AWG program.
-    ...
 
     Attributes
     ----------
@@ -60,6 +59,13 @@ class MainWindow(QMainWindow):
         Global card settings for the AWG, including the number of active 
         channels and the sample rate. This dictionary is passed through to 
         the `ActionContainer` objects when they are generating their data.
+    amp_adjusters : list of AmpAdjuster2D
+        AmpAdjusters for the different AWG channels. These are objects defined 
+        once for each channel and then passed through to the ActionContainer 
+        classes so that they can convert their amplitudes to mV.
+        
+        Even if amp_adjust is turned off, the AmpAdjuster classes are still 
+        used (and just don't adjust the amplitudes depending on the frequency).
     rr : RearrangementHandler or None
         The `RearrangementHandler` object which generates the parameters for 
         rearrangement actions. If rearrangement is disabled, this attribute is 
@@ -367,7 +373,7 @@ class MainWindow(QMainWindow):
         
         self.button_calculate_send = QPushButton('Calculate and send data to card')
         self.button_calculate_send.clicked.connect(self.calculate_send)
-        self.button_calculate_send.setEnabled(False)
+        # self.button_calculate_send.setEnabled(False)
         layout.addWidget(self.button_calculate_send)
 
         self.button_calculate_csv = QPushButton('Calculate and save segment data to .csv files')
@@ -444,15 +450,36 @@ class MainWindow(QMainWindow):
         self.w.show()
 
     def segment_remove(self):
+        """Deletes the selected segments from the segment list. All segments 
+        will a later index now have a new index, so they will be flagged that 
+        they need to retransfer to the AWG card.
+        
+        If the currently selected row is one of the rearrangement rows, this is
+        not deleted. Rearrangement should be deactivated first.
+        
+        If rearrangement is active and the segment is deleted before the 
+        rearrangement segments, the rearrangement segments are incremented by 
+        -1.
+        
+        """
         selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
         print(selectedRows)
         if len(selectedRows) != 0:
             selectedRows.sort(reverse=True)
             for row in selectedRows:
-                try:
-                    del self.segments[row]
-                except IndexError:
-                    pass
+                if (self.rr != None) and (row in self.rr.segments):
+                    logging.error('Cannot delete a rearrangement segment. '
+                                  'Deactivate rearrangement first.')
+                else:
+                    try:
+                        del self.segments[row]
+                        for segment in self.segments[row:]:
+                            for action in segment:
+                                action.needs_to_transfer = True
+                        if (self.rr != None) and all(row < i for i in self.rr.segments):
+                            self.rr.segments = [i-1 for i in self.rr.segments]
+                    except IndexError:
+                        pass
             self.segment_list_update()
 
     def segment_up(self):
@@ -482,14 +509,19 @@ class MainWindow(QMainWindow):
                                   'rearrangement first.')
                     return
             self.segments[current_segment],self.segments[current_segment-1] = self.segments[current_segment-1],self.segments[current_segment]
+            for segment in self.segments[current_segment-1:current_segment+1]:
+                for action in segment:
+                    action.needs_to_transfer = True
             self.segment_list_update()
             self.list_segments.setCurrentRow(currentRow-1)
 
     def segment_down(self):
         """Moves the selected segment in the list attribute `list_segments` 
-        down one row. If rearrangement is on, the `list_segments` index may 
-        not match up with the `segments` index, so the segments index is 
-        extracted from the first number in the label text.
+        down one row. Rearrangement steps are not allowed to move to prevent 
+        complications if the steps were to become seperated.
+        
+        The moved segments are marked that they need to transfer to the AWG 
+        because they now have different indicies than they did before.
         
         """
         selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
@@ -518,12 +550,28 @@ class MainWindow(QMainWindow):
                                   'rearrangement first.')
                     return
             self.segments[current_segment],self.segments[current_segment+1] = self.segments[current_segment+1],self.segments[current_segment]
+            for segment in self.segments[current_segment:current_segment+2]:
+                for action in segment:
+                    action.needs_to_transfer = True
             self.segment_list_update()
             self.list_segments.setCurrentRow(currentRow+1)
     
     def segment_add(self,segment_params,editing_segment=None):
         """Add a new segment to the segment list or edits an exisiting 
         segment based on the kwargs in the segment_params dict.
+        
+        When adding a segment all segments after this are set to need to be 
+        retransferred to the AWG card because they will have changed index.
+        
+        Segments cannot be added in the middle of the rearrange segments; they
+        will be added at the end instead.
+        
+        If rearrangement is active and the segment is added before the 
+        rearrangement segments, the rearrangement segments are incremented by 
+        1.
+        
+        If a rearrangement segment is edited, then all the rearrangement 
+        segments will be edited.
 
         Parameters
         ----------
@@ -559,9 +607,23 @@ class MainWindow(QMainWindow):
                 selected_row = [x.row() for x in self.list_segments.selectedIndexes()][0]
             except:
                 selected_row = self.list_segments.count()-1
+            if (self.rr != None) and (selected_row in self.rr.segments):
+                selected_row = max(self.rr.segments)
             self.segments.insert(selected_row+1,segment)
+            for segment in self.segments[selected_row+1:]:
+                for action in segment:
+                    action.needs_to_transfer = True
+            if (self.rr != None) and all(selected_row < i for i in self.rr.segments):
+                self.rr.segments = [i+1 for i in self.rr.segments]
         else:
-            self.segments[editing_segment] = segment
+            if (self.rr != None) and (editing_segment in self.rr.segments):
+                base_rr_segment = self.rr.segments[0]
+                self.button_rearr.setChecked(False)
+                self.segments[base_rr_segment] = segment
+                self.list_segments.setCurrentRow(base_rr_segment)
+                self.button_rearr.setChecked(True)
+            else:
+                self.segments[editing_segment] = segment
         self.segment_list_update()
 
     def rearr_toggle(self):
@@ -832,6 +894,8 @@ class MainWindow(QMainWindow):
                     self.list_segments.setRowHidden(i,True)
             else:
                 label = '{} : duration_ms={}'.format(i,segment[0].duration_ms)
+                if any([action.needs_to_transfer for action in segment]):
+                    label += ' (NEEDS TO TRANSFER)'
                 for channel in range(self.card_settings['active_channels']):
                     action = segment[channel]
                     label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
@@ -1000,6 +1064,7 @@ class MainWindow(QMainWindow):
 
         """
         if self.button_prevent_freq_jumps.isChecked():
+            logging.debug('Preventing frequency jumps.')
             for i,segment in enumerate(self.segments):
                 if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
                     for channel in range(self.card_settings['active_channels']):
@@ -1340,7 +1405,12 @@ class MainWindow(QMainWindow):
                 np.savetxt(filename, data, delimiter=",")
                 
     def calculate_send(self):
-        pass
+        """Sends the data to the AWG card."""
+        for segment in self.segments:
+            for action in segment:
+                action.needs_to_transfer = False
+                
+        self.segment_list_update()
     
     def list_step_toggle_next_condition(self):
         """Toggles the next step condition of the selected step in the 

@@ -332,16 +332,6 @@ class ActionContainer():
 
         phases = np.asarray(phases)
         return phases
-        
-    # def calculate(self):
-    #     #TODO: Insert amp calibration (set to 1e-6 atm to be safe)
-    #     self.calculate_freq()
-    #     self.calculate_amp()
-        
-    #     self.calculate_freq_sig()
-    #     self.action = self.amp*self.freq_sig*self.card_settings['max_output_mV']*1e-6
-        
-    #     return self.action
     
     def get_autoplot_traces(self,num_points=50,show_amp_in_mV=True):
         """Returns samples of the amplitude and frequency profiles for the 
@@ -485,4 +475,4 @@ if __name__ == '__main__':
                                'start_phase' : [0]},
                      'amp' : {'function' : 'static',
                               'start_amp': [1]}}
-    action = ActionContainer(action_params,card_settings)
+    action = ActionContainer(action_params,card_settings,None)
