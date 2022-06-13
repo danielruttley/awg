@@ -256,7 +256,7 @@ class ActionContainer():
                 phase_data = self.calculate_phase(freq_data,tone_freq_params['start_phase'])
                 amp_data_mV = self.amp_adjuster.adjuster(freq_data,amp_data)
                 
-                self.data += amp_data_mV*np.sin(phase_data)*1e-9
+                self.data += amp_data_mV*np.sin(phase_data)#*1e-9
             self.data = self.data[1:]
             self.needs_to_calculate = False
             self.needs_to_transfer = True

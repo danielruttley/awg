@@ -1,1 +1,1 @@
-from .slm_class import SLM
+from .awg_class import AWG

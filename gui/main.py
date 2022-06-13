@@ -29,6 +29,7 @@ if __name__ == '__main__':
 
 from actions import ActionContainer, AmpAdjuster2D
 from rearrangement import RearrangementHandler
+from awg import AWG
 
 num_plot_points = 100
 
@@ -95,7 +96,7 @@ class MainWindow(QMainWindow):
         
         self.card_settings = {'active_channels':1,
                               'sample_rate_Hz':625000000,
-                              'max_output_mV':100,
+                              'max_output_mV':200,
                               'number_of_segments':8,
                               'segment_min_samples':192,
                               'segment_step_samples':32
@@ -143,6 +144,7 @@ class MainWindow(QMainWindow):
         self.steps = []
         
         self.set_amp_adjuster_settings(amp_adjuster_settings)
+        self.awg = AWG(**self.card_settings)
 
     def _create_awg_header(self):
         layout = QGridLayout()
@@ -571,7 +573,9 @@ class MainWindow(QMainWindow):
         1.
         
         If a rearrangement segment is edited, then all the rearrangement 
-        segments will be edited.
+        segments will be edited. This means that a parameter for all the 
+        rearrangement segments can be edited by sending the parameter to just 
+        one of the segments.
 
         Parameters
         ----------
@@ -1406,10 +1410,7 @@ class MainWindow(QMainWindow):
                 
     def calculate_send(self):
         """Sends the data to the AWG card."""
-        for segment in self.segments:
-            for action in segment:
-                action.needs_to_transfer = False
-                
+        self.awg.load_all(self.segments, self.steps)
         self.segment_list_update()
     
     def list_step_toggle_next_condition(self):

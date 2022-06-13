@@ -4,10 +4,9 @@ import sys
 from ctypes import *
 
 # load registers for easier access
-from py_header.regs import *
-
+from .py_header.regs import *
 # load registers for easier access
-from py_header.spcerr import *
+from .py_header.spcerr import *
 
 SPCM_DIR_PCTOCARD = 0
 SPCM_DIR_CARDTOPC = 1
@@ -60,7 +59,7 @@ if os.name == 'nt':
     # Load DLL into memory.
     # use windll because all driver access functions use _stdcall calling convention under windows
     if (bIs64Bit == 1):
-        spcmDll = windll.LoadLibrary ("spcm_win64.dll")
+        spcmDll = windll.LoadLibrary (os.path.dirname(os.path.realpath(__file__))+"\spcm_win64.dll")
     else:
         spcmDll = windll.LoadLibrary ("c:\\windows\\system32\\spcm_win32.dll")
 

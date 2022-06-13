@@ -2,10 +2,10 @@ import logging
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG)
 
 import numpy as np
-
-from pyspcm import *
-from spcm_tools import *
 import ctypes
+
+from .pyspcm import *
+from .spcm_tools import *
 
 class AWG():
     """Defines the AWG wrapper class for handling interfacing with the AWG.
@@ -67,7 +67,7 @@ class AWG():
         
     """
     
-    def __init__(self,active_channels=1,sample_rate_Hz=int(625e6),max_output_mV=100,number_of_segments=16):
+    def __init__(self,active_channels=1,sample_rate_Hz=int(625e6),max_output_mV=100,number_of_segments=16,**kwargs):
         """Create the class and set basic attributes. Kwargs are those 
         expected by the controller card_settings dict.
         
@@ -103,9 +103,9 @@ class AWG():
             logging.error("No AWG card found")
             
         #Initialisation of reading parameters and definition of memory type.
-        lCardType     = int32 (0) 
-        lSerialNumber = int32 (0)
-        lFncType      = int32 (0)
+        lCardType     = int32(0) 
+        lSerialNumber = int32(0)
+        lFncType      = int32(0)
         spcm_dwGetParam_i32(self.hCard, SPC_PCITYP, byref(lCardType))                  # Enquiry of the pointer (lCardType.value) should return 484898. In manual p.56, this number should correspond to our device M4i.6622
         spcm_dwGetParam_i32(self.hCard, SPC_PCISERIALNO, byref(lSerialNumber))         # Enquiry of the pointer should return 14926. This can be cross-checked with the Spectrum documentation (check the Certificate)
         spcm_dwGetParam_i32(self.hCard, SPC_FNCTYPE, byref(lFncType))                  # Enquiry of the pointer should return 2. In manual p.59, this value corresponds to the arb. function generator. 
@@ -172,6 +172,12 @@ class AWG():
             logging.debug('Setting up channel {}'.format(lChannel))
             spcm_dwSetParam_i32 (self.hCard, SPC_ENABLEOUT0    + lChannel * (SPC_ENABLEOUT1    - SPC_ENABLEOUT0),    1)
             spcm_dwSetParam_i32 (self.hCard, SPC_AMP0          + lChannel * (SPC_AMP1          - SPC_AMP0),          self.max_output_mV)
+            
+            lmax_output_mV = int32(0)
+            spcm_dwGetParam_i32(self.hCard, SPC_AMP0+lChannel*(SPC_AMP1 - SPC_AMP0), byref(lmax_output_mV))
+            self.max_output_mV = lmax_output_mV.value
+            logging.debug('channel {} output limit set to {} mV'.format(lChannel,self.max_output_mV))
+            
             spcm_dwSetParam_i32 (self.hCard, SPC_CH0_STOPLEVEL + lChannel * (SPC_CH1_STOPLEVEL - SPC_CH0_STOPLEVEL), SPCM_STOPLVL_HOLDLAST)
 
         
@@ -312,7 +318,7 @@ class AWG():
                 next_step_index = 0
             else:
                 next_step_index = step_index + 1
-            self._set_step(**step,next_step_index=next_step_index)
+            self._set_step(step_index,**step,next_step_index=next_step_index)
             
         self.start()
             
@@ -357,8 +363,13 @@ class AWG():
         -------
         None.
         
-        """        
-        segment_data /= segment_data/self.max_output_mV
+        """ 
+        print('max',max(segment_data))
+        print('min',min(segment_data))        
+        segment_data /= self.max_output_mV
+        print('max',max(segment_data))
+        print('min',min(segment_data))
+        
         if any(segment_data > 1) or any(segment_data < -1):
             logging.warning('Some of the data in segment {} was '
                             'larger than the maximum amplitude of '
@@ -366,6 +377,11 @@ class AWG():
                             'stay within the bounds.'.format(segment_index,self.max_output_mV))
             segment_data = segment_data.clip(max=1, min=-1)
         segment_data = np.int16(segment_data*2**15)
+        
+        print('segment',segment_index)
+        print(segment_data)
+        print('max',max(segment_data))
+        print('min',min(segment_data))
         
         dwSegmentLenSample = len(segment_data)
         
@@ -417,6 +433,8 @@ class AWG():
         
         if dwError == ERR_OK:
             dwError = spcm_dwDefTransfer_i64(self.hCard, SPCM_BUF_DATA, SPCM_DIR_PCTOCARD, dwNotifySize, pvBuffer, 0, qwBufferSize)
+        else:
+            logging.error('Did not transfer data to buffer')
             
         if dwError == ERR_OK:
             dwError = spcm_dwSetParam_i32(self.hCard, SPC_M2CMD, M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)
@@ -426,7 +444,7 @@ class AWG():
         if dwError != ERR_OK:
             logging.error('Failed to transfer data to card for segment {}'.format(segment_index))
         
-    def _set_step(self,step_index,segment,number_of_loops,after_step,next_step_index):
+    def _set_step(self,step_index,segment,number_of_loops,after_step,next_step_index,**kwargs):
         """
         Sets the parameters for a single step in the routine.
 
