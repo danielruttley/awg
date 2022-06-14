@@ -43,6 +43,7 @@ color_rearr_off = '#e04848'
 color_rearr_on = '#05a815'
 color_rearr_on_background = '#92f09b'
 color_needs_to_calculate = '#dfbbf0'
+color_loop_background = '#659ffc'
 
 dicts_to_save = ['card_settings','network_settings','amp_adjuster_settings',
                  'rearr_settings']
@@ -171,17 +172,15 @@ class MainWindow(QMainWindow):
         self.layout.addLayout(layout)
 
     def _create_layout_datagen(self):
-        layout_step_control = QGridLayout()
-        
-        
-        self.button_check_current_step = QPushButton("Check current step: ?")
-        layout_step_control.addWidget(self.button_check_current_step,0,0,1,2)
-        
+        layout_step_control = QHBoxLayout()
+    
         self.button_trigger = QPushButton("Trigger AWG")
-        layout_step_control.addWidget(self.button_trigger,1,0,1,1)
-
-        self.button_trigger_until_zero = QPushButton("Trigger AWG until step 0")
-        layout_step_control.addWidget(self.button_trigger_until_zero,1,1,1,1)
+        self.button_trigger.clicked.connect(self.awg_trigger)
+        layout_step_control.addWidget(self.button_trigger)
+    
+        self.button_check_current_step = QPushButton("Check current step: ?")
+        self.button_check_current_step.clicked.connect(self.awg_update_current_step)
+        layout_step_control.addWidget(self.button_check_current_step)
 
         self.layout_datagen.addLayout(layout_step_control)
         
@@ -1413,28 +1412,36 @@ class MainWindow(QMainWindow):
                     if (self.rr != None) and (step_index in self.rr.steps) and (not self.button_autoplot_condense_rearr.isChecked()):
                         step_segments = self.rr.segments
                     for segment in step_segments:
-                        for i in range(step['number_of_loops']):
-                            if self.rr != None:
-                                if (self.button_autoplot_condense_rearr.isChecked()) and (segment in self.rr.segments[1:]):
-                                    continue
-                                elif segment in self.rr.segments:
-                                    freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
-                                                                                brush=color_rearr_on_background,movable=False))
-                                    amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
-                                                                                brush=color_rearr_on_background,movable=False))
-                            action = self.segments[segment][channel]
-                            freqs, amps = action.get_autoplot_traces(show_amp_in_mV = self.button_autoplot_amp_mV.isChecked())
-                            xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
-                            for j,(freq,amp) in enumerate(zip(freqs,amps)):
-                                freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2))
-                                amp_plot.plot(xs,amp, pen=pg.mkPen(color=j,width=2))
-                                
+                        if self.rr != None:
+                            if (self.button_autoplot_condense_rearr.isChecked()) and (segment in self.rr.segments[1:]):
+                                continue
+                            elif segment in self.rr.segments:
+                                freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
+                                                                            brush=color_rearr_on_background,movable=False))
+                                amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
+                                                                            brush=color_rearr_on_background,movable=False))
+
+                        action = self.segments[segment][channel]
+                        freqs, amps = action.get_autoplot_traces(show_amp_in_mV = self.button_autoplot_amp_mV.isChecked())
+                        xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
+                        if step['number_of_loops'] > 1:
+                            freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
+                                                                        brush=color_loop_background,movable=False,
+                                                                        span = (0.8,1)))
+                            amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
+                                                                        brush=color_loop_background,movable=False,
+                                                                        span = (0.8,1)))
+                            duration_xlabels[current_pos+0.5] = '{}\n({} loops = {})'.format(action.duration_ms,step['number_of_loops'],action.duration_ms*step['number_of_loops'])
+                        else:
                             duration_xlabels[current_pos+0.5] = action.duration_ms
-                            segment_xlabels[current_pos+0.5] = segment
-                            freq_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
-                            amp_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
-                            
-                            current_pos += 1
+                        segment_xlabels[current_pos+0.5] = segment
+                        for j,(freq,amp) in enumerate(zip(freqs,amps)):
+                            freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2))
+                            amp_plot.plot(xs,amp, pen=pg.mkPen(color=j,width=2))
+                        freq_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
+                        amp_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
+                        
+                        current_pos += 1
                         if step['after_step'] == 'loop_until_trigger':
                             freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+0.2),orientation='vertical',
                                                                         brush=color_loop_until_trigger,movable=False))
@@ -1466,7 +1473,23 @@ class MainWindow(QMainWindow):
         """Sends the data to the AWG card."""
         self.awg.load_all(self.segments, self.steps)
         self.segment_list_update()
-    
+        
+    def awg_trigger(self):
+        """Forces the AWG to trigger with a software trigger. The check 
+        current step button is also updated.
+        
+        """
+        self.awg.trigger()
+        self.awg_update_current_step()
+        
+    def awg_update_current_step(self):
+        """Gets the current step of the AWG and writes the value to the 
+        check current step button in the GUI.
+        
+        """
+        step = self.awg.get_current_step()
+        self.button_check_current_step.setText('Check current step: {}'.format(step))
+
     def list_step_toggle_next_condition(self):
         """Toggles the next step condition of the selected step in the 
         `list_step` in the GUI. Toggles between continue and 
