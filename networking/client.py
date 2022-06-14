@@ -15,7 +15,7 @@ except ImportError:
 import sys
 if '..' not in sys.path: sys.path.append('..')
 from .mythread import reset_slot
-from .strtypes import error, warning, info
+from logging import error, warning, info
 
 def simple_msg(host, port, msg, encoding='utf-8', recv_buff_size=-1):
     """Open a socket and send a TCP message, then receive back a message."""

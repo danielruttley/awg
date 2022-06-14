@@ -53,10 +53,14 @@ class AWG():
     stop
         Stops the card but doesn't close the connection.
         
+    trigger
+        Forces a software trigger of the AWG card that will take effect even 
+        if the card is waiting for an external trigger.
+        
     reinit
         Deletes the connection to the AWG card and then calls init to make a 
         new connection after reinitialisation.
-        
+    
     _set_segment
         Internal method for sending preprepared data to the card to save in 
         a certain segment.
@@ -256,6 +260,27 @@ class AWG():
         """
         spcm_dwSetParam_i32(self.hCard, SPC_M2CMD, M2CMD_CARD_STOP)
         
+    def trigger(self):
+        """Triggers the AWG via a software trigger. This trigger is forced so 
+        will trigger even if the card is waiting for an external trigger.
+
+        Returns
+        -------
+        None.
+        
+        """
+        spcm_dwSetParam_i32(self.hCard, SPC_M2CMD, M2CMD_CARD_FORCETRIGGER)
+        
+    def close(self):
+        """Closes the connection to the AWG card.
+        
+        Returns
+        -------
+        None.
+        
+        """
+        spcm_vClose(self.hCard)
+        
     def reinit(self):
         """Stops the card, disconnects, and reinitialises the card. The card 
         is not started yet so that segments/steps can be reloaded.
@@ -266,7 +291,7 @@ class AWG():
 
         """
         self.stop()
-        spcm_vClose(self.hCard)
+        self.close()
         self.init()
         
     def load_all(self,segments,steps):
@@ -321,7 +346,21 @@ class AWG():
             self._set_step(step_index,**step,next_step_index=next_step_index)
             
         self.start()
-            
+        
+    def get_current_step(self):
+        """Returns the current step and segment that the AWG card is on.
+        
+        Returns
+        -------
+        int
+            The index of the current step being replayed by the card.
+
+        """
+        current_step = int64(0)
+        spcm_dwGetParam_i64(self.hCard, SPC_SEQMODE_STATUS, byref(current_step))
+        
+        return current_step.value
+        
             
     def _multiplex(self,arrays):
         """Converts a list of np.ndarrays in the form of [a,a,,...], 

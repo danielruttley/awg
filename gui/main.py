@@ -4,6 +4,8 @@ logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=loggin
 import sys
 import os
 import numpy as np
+import json
+
 os.system("color")
 
 #from qtpy.QtCore import QThread,Signal,Qt
@@ -17,7 +19,6 @@ from qtpy.QtGui import QIcon,QColor
 import pyqtgraph as pg
 
 from . import qrc_resources
-from .networking.client import PyClient
 
 from .helpers import QHLine, QVLine
 from .secondary_windows import (CardSettingsWindow, SegmentCreationWindow,
@@ -30,6 +31,7 @@ if __name__ == '__main__':
 from actions import ActionContainer, AmpAdjuster2D
 from rearrangement import RearrangementHandler
 from awg import AWG
+from networking.networker import Networker
 
 num_plot_points = 100
 
@@ -40,6 +42,12 @@ color_rearr_off = '#e04848'
 color_rearr_on = '#05a815'
 color_rearr_on_background = '#92f09b'
 color_needs_to_calculate = '#dfbbf0'
+
+dicts_to_save = ['card_settings','network_settings','amp_adjuster_settings',
+                 'rearr_settings']
+datagen_settings_to_save = ['button_couple_steps_segments','button_prevent_freq_jumps',
+                            'button_prevent_amp_jumps','button_freq_adjust_static_segments',
+                            'button_prevent_phase_jumps']
 
 class MainWindow(QMainWindow):
     """Acts as controller for the AWG program.
@@ -81,49 +89,13 @@ class MainWindow(QMainWindow):
         the other relies on.
         
     """
-    def __init__(self,name='AWG1',dev_mode=False):
+    def __init__(self,name='AWG1',params_filename='default_params.txt',dev_mode=False):
         super().__init__()
 
-        self.name = name
-
-        # if dev_mode:
-        # self.tcp_client = PyClient(host='localhost',port=6830,name='self.name')
-        # else:
-        #     self.tcp_client = PyClient(host='129.234.190.164',port=8627,name='self.name')
-        # self.tcp_client.start()
-        
+        self.name = name        
         self.last_AWGparam_folder = '.'
         
-        self.card_settings = {'active_channels':1,
-                              'sample_rate_Hz':625000000,
-                              'max_output_mV':200,
-                              'number_of_segments':8,
-                              'segment_min_samples':192,
-                              'segment_step_samples':32
-                              }
-        
-        self.rearr_settings = {'channel':0,
-                               'target_freq_MHz':[101]
-                               }
-        
-        amp_adjuster_settings = [{'enabled':True,
-                                  'non_adjusted_amp_mV':100,
-                                  'filename':'Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_H_calFile_17.02.2022.txt',
-                                  'freq_limit_1_MHz':85,
-                                  'freq_limit_2_MHz':110,
-                                  'amp_limit_1':0,
-                                  'amp_limit_2':1},
-                                 {'enabled':True,
-                                  'non_adjusted_amp_mV':100,
-                                  'filename':'Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_V_calFile_17.02.2022.txt',
-                                  'freq_limit_1_MHz':85,
-                                  'freq_limit_2_MHz':115,
-                                  'amp_limit_1':0,
-                                  'amp_limit_2':1},
-                                 ]
-        
-        self.rr = None
-        self.amp_adjusters = [None,None]
+        self.card_settings = {'active_channels':1}
 
         self.setWindowTitle("{} control".format(self.name))
         self.layout = QVBoxLayout()
@@ -131,7 +103,8 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         widget.setLayout(self.layout)
         self.setCentralWidget(widget)
-
+        
+        self._create_menu_bar()
         self._create_awg_header()
         self._create_columns()
         self._create_layout_datagen()
@@ -139,12 +112,29 @@ class MainWindow(QMainWindow):
         self._create_calculate_buttons()
 
         self.update_label_awg()
-
+        
+        self.amp_adjusters = [None,None]
+        self.rr = None
         self.segments = []
         self.steps = []
         
-        self.set_amp_adjuster_settings(amp_adjuster_settings)
-        self.awg = AWG(**self.card_settings)
+        self.load_params(params_filename)
+        self.networker = Networker(main_window=self,server_name=self.name,**self.network_settings)
+
+    def _create_menu_bar(self):
+        action_load_params = QAction(self)
+        action_load_params.setText("Load AWGparam")
+
+        action_save_params = QAction(self)
+        action_save_params.setText("Save AWGparam")
+        
+        action_load_params.triggered.connect(self.load_params_dialogue)
+        action_save_params.triggered.connect(self.save_params_dialogue)
+        
+        menu_bar = self.menuBar()
+        menu_main = menu_bar.addMenu("Menu")
+        menu_main.addAction(action_load_params)
+        menu_main.addAction(action_save_params)
 
     def _create_awg_header(self):
         layout = QGridLayout()
@@ -180,9 +170,20 @@ class MainWindow(QMainWindow):
         self.layout.addLayout(layout)
 
     def _create_layout_datagen(self):
-        self.button_check_current_segment = QPushButton("Check current segment: ?")
-        self.layout_datagen.addWidget(self.button_check_current_segment)
+        layout_step_control = QGridLayout()
+        
+        
+        self.button_check_current_step = QPushButton("Check current step: ?")
+        layout_step_control.addWidget(self.button_check_current_step,0,0,1,2)
+        
+        self.button_trigger = QPushButton("Trigger AWG")
+        layout_step_control.addWidget(self.button_trigger,1,0,1,1)
 
+        self.button_trigger_until_zero = QPushButton("Trigger AWG until step 0")
+        layout_step_control.addWidget(self.button_trigger_until_zero,1,1,1,1)
+
+        self.layout_datagen.addLayout(layout_step_control)
+        
         self.layout_datagen.addWidget(QHLine())
         
         layout_prevent_jumps = QGridLayout()
@@ -394,10 +395,112 @@ class MainWindow(QMainWindow):
                     widget.deleteLater()
                 else:
                     self._clear_layout(item.layout())
+                    
+    def load_params(self,filename):
+        logging.info("Loading AWG params from '{}'.".format(filename))
+        
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        
+        for name in dicts_to_save:
+            setattr(self,name,data[name])
+            
+        self.set_datagen_settings(data['datagen_settings'])
+            
+        self.segments = []
+        for segment in data['segments']:
+            self.segment_add(segment)
+            
+        self.steps = data['steps']
+        
+        self.segment_list_update()
+        
+        if data['rearr_state'] == None:
+            self.rr = None
+            self.button_rearr.setChecked(False)
+        else:
+            self.rr = RearrangementHandler([0],[0])
+            rr_start_index = data['rearr_state']['segments'][0]
+            self.rr.set_state(data['rearr_state'])
+            self.button_rearr.setChecked(False)
+            self.rearr_toggle()
+            
+            self.list_segments.setCurrentRow(rr_start_index)
+            self.button_rearr.setChecked(True)
+        
+        try:
+            self.awg.close()
+        except Exception as e:
+            logging.error("Failed to close AWG object. This might be okay if one wasn't expected to exist.")
+        self.awg = AWG(**self.card_settings)
+        self.set_amp_adjuster_settings()
+        
+    def load_params_dialogue(self):
+        filename = QFileDialog.getOpenFileName(self, 'Load AWGparam','.',"Text documents (*.txt)")[0]
+        if filename != '':
+            self.load_params(filename)
+            self.last_AWGparam_folder = os.path.dirname(filename)
+    
+    def save_params(self,filename):
+        logging.info("Saving AWG params to '{}'.".format(filename))
+              
+        data = {}
+        
+        self.refresh_amp_adjuster_settings()
+        
+        for name in dicts_to_save:
+            data[name] = getattr(self,name)
+            
+        data['datagen_settings'] = self.get_datagen_settings()
+            
+        segments_data = []
+        for segment in self.segments:
+            segment_data = {}
+            for i,action in enumerate(segment):
+                action_params = action.get_action_params()
+                segment_data['duration_ms'] = action_params.pop('duration_ms')
+                segment_data['Ch{}'.format(i)] = action_params
+            segments_data.append(segment_data)
+        
+        data['segments'] = segments_data
+        data['steps'] = self.steps
+        
+        if self.rr == None:
+            data['rearr_state'] = None
+        else:
+            data['rearr_state'] = self.rr.get_state()
+
+        try:
+            os.makedirs(os.path.dirname(filename),exist_ok=True)
+        except FileExistsError as e:
+            logging.warning('FileExistsError thrown when saving AWGParams file',e)
+            
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+            
+        logging.info('AWGparam saved to "{}"'.format(filename))
+
+    def save_params_dialogue(self):
+        filename = QFileDialog.getSaveFileName(self, 'Save AWGparam',self.last_AWGparam_folder,"Text documents (*.txt)")[0]
+        if filename != '':
+            self.save_params(filename)
+            self.last_AWGparam_folder = os.path.dirname(filename)
             
     def open_rearr_settings_window(self):
         self.w = RearrSettingsWindow(self,self.rearr_settings)
         self.w.show()
+        
+    def get_datagen_settings(self):
+        settings = {}
+        for name in datagen_settings_to_save:
+            button = getattr(self,name)
+            settings[name] = button.isChecked()
+        return settings
+    
+    def set_datagen_settings(self,settings):
+        for name,value in settings.items():
+            button = getattr(self,name)
+            button.setChecked(value)
         
     def update_rearr_settings(self,rearr_settings):
         """Update the rearrangement settings with a new dictionary. Called 
@@ -683,11 +786,13 @@ class MainWindow(QMainWindow):
                 segment = self.segments[index]
                 rearr_channel = self.rearr_settings['channel']
                     
-            prev_segment = self.segments[index-1]
-            try:
-                start_freq_MHz = prev_segment[rearr_channel].freq_params['end_freq_MHz']
-            except:
-                start_freq_MHz = prev_segment[rearr_channel].freq_params['start_freq_MHz']
+            # prev_segment = self.segments[index-1]
+            # try:
+            #     start_freq_MHz = prev_segment[rearr_channel].freq_params['end_freq_MHz']
+            # except:
+            #     start_freq_MHz = prev_segment[rearr_channel].freq_params['start_freq_MHz']
+            
+            start_freq_MHz = self.rearr_settings['start_freq_MHz']
             target_freq_MHz = self.rearr_settings['target_freq_MHz']
             
             self.rr = RearrangementHandler(start_freq_MHz,target_freq_MHz)
@@ -977,14 +1082,21 @@ class MainWindow(QMainWindow):
         self.w = CardSettingsWindow(self,self.card_settings)
         self.w.show()    
     
-    def open_amp_adjuster_settings_window(self):
-        amp_adjuster_settings = []
+    def refresh_amp_adjuster_settings(self):
+        """Updates the amp_adjuster_settings list of dicts by requesting each 
+        AmpAdjuster to report its settings.
+        
+        """
+        self.amp_adjuster_settings = []
         for adjuster in self.amp_adjusters:
-            amp_adjuster_settings.append(adjuster.get_settings())
-        self.w = AmpAdjusterSettingsWindow(self,amp_adjuster_settings)
+            self.amp_adjuster_settings.append(adjuster.get_settings())
+            
+    def open_amp_adjuster_settings_window(self):
+        self.refresh_amp_adjuster_settings()
+        self.w = AmpAdjusterSettingsWindow(self,self.amp_adjuster_settings)
         self.w.show()
         
-    def set_amp_adjuster_settings(self,new_amp_adjuster_settings):
+    def set_amp_adjuster_settings(self):
         """Accepts new amp adjuster settings and passes them through to the 
         `AmpAdjuster2D` objects to update their parameters.
         
@@ -1006,10 +1118,12 @@ class MainWindow(QMainWindow):
             `AmpAdjuster2D` class docstring.
         
         """
+        new_amp_adjuster_settings = self.amp_adjuster_settings
         if len(new_amp_adjuster_settings) < len(self.amp_adjusters):
             logging.error('Less AmpAdjuster settings are specified that the '
                           'number of AmpAdjusters ({}). Cancelling the new '
                           'settings.'.format(len(self.amp_adjusters)))
+            self.refresh_amp_adjuster_settings()
             return
         for i,(settings,adjuster) in enumerate(zip(new_amp_adjuster_settings,self.amp_adjusters)):
             if adjuster == None:
@@ -1021,11 +1135,9 @@ class MainWindow(QMainWindow):
             for action in segment:
                 action.needs_to_calculate = True
         
+        self.refresh_amp_adjuster_settings()
         self.segment_list_update()
         self.plot_autoplot_graphs()
-
-    def get_slm_settings(self):
-        return self.slm_settings
     
     def update_card_settings(self,card_settings):
         old_card_settings = self.card_settings
@@ -1198,8 +1310,6 @@ class MainWindow(QMainWindow):
         
         print(required_segments)
         
-
-        
         if self.button_couple_steps_segments.isChecked():
             new_steps = []
             for segment in required_segments:
@@ -1234,110 +1344,6 @@ class MainWindow(QMainWindow):
             self.button_prevent_freq_jumps.setChecked(False)
             self.button_prevent_amp_jumps.setChecked(False)
             self.button_prevent_phase_jumps.setChecked(False)
-
-    def set_holos_from_list(self,holo_list):
-        """
-        Set holograms from a list.
-
-        Parameters
-        ----------
-        holos : list
-            Should be a list of sublists containing the holo name and a dict 
-            containing the holo arguments in the form [[holo1_name,{holo1_args}],...]
-        """
-        self.holos = []
-        for i,(name,args) in enumerate(holo_list):
-            try:
-                holo_params = {'name':name}
-                holo_params['type'],holo_params['function'] = get_holo_type_function(name)
-                holo_params = {**holo_params,**args}
-                holo = get_holo_container(holo_params,self.global_holo_params)
-                self.holos.append(holo)
-            except Exception:
-                logging.error('Error when creating Hologram {}. The hologram has been skipped.\n'.format(i))
-        self.update_holo_list()
-        self.w = None
-
-    def generate_holo_list(self):
-        holo_list = []
-        for holo in self.holos:
-            name = holo.get_name()
-            args = holo.get_local_args()
-            holo_list.append([name,args])
-        return holo_list
-
-    def save_holo_file(self,filename):
-        holo_list = self.generate_holo_list()
-        msg = [self.slm_settings,holo_list]
-        with open(filename, 'w') as f:
-            f.write(str(msg))
-        logging.info('SLM settings and holograms saved to "{}"'.format(filename))
-    
-    def save_current_holo_dialogue(self):
-        filename = QFileDialog.getSaveFileName(self, 'Save hologram',self.last_SLMparam_folder,"PNG (*.png);;24-bit Bitmap (*.bmp)")[0]
-        if filename != '':
-            hg.misc.save(self.total_holo,filename)
-
-    def save_holo_file_dialogue(self):
-        filename = QFileDialog.getSaveFileName(self, 'Save SLMparam',self.last_SLMparam_folder,"Text documents (*.txt)")[0]
-        if filename != '':
-            self.save_holo_file(filename)
-            self.last_SLMparam_folder = os.path.dirname(filename)
-            print(self.last_SLMparam_folder)
-
-    def recieved_tcp_msg(self,msg):
-        logging.info('TCP message recieved: "'+msg+'"')
-        split_msg = msg.split('=')
-        command = split_msg[0]
-        arg = split_msg[1]
-        if command == 'save':
-            pass
-        elif command == 'save_all':
-            self.save_holo_file(arg)
-        elif command == 'load_all':
-            self.load_holo_file(arg)
-        elif command == 'set_data':
-            for update in eval(arg):
-                try:
-                    ind,arg_name,arg_val = update
-                    logging.info('Updating Hologram {} with {} = {}'.format(ind,arg_name,arg_val))
-                    holo = self.holos[ind]
-                    holo.update_arg(arg_name,arg_val)
-                    self.holos[ind] = holo
-                except NameError: 
-                    logging.error('{} is an invalid argument for Hologram {}\n'.format(arg_name,ind))
-                except IndexError: 
-                    logging.error('Hologram {} does not exist\n'.format(ind))
-        self.update_holo_list()
-    
-    def load_holo_file_dialogue(self):
-        filename = QFileDialog.getOpenFileName(self, 'Load SLMparam',self.last_SLMparam_folder,"Text documents (*.txt)")[0]
-        if filename != '':
-            self.load_holo_file(filename)
-            self.last_SLMparam_folder = os.path.dirname(filename)
-
-    def load_holo_file(self,filename):
-        try:
-            with open(filename, 'r') as f:
-                msg = f.read()
-        except FileNotFoundError:
-            logging.error('"{}" does not exist'.format(filename))
-            return
-        try:
-            msg = eval(msg)
-            slm_settings = msg[0]
-            holo_list = msg[1]
-            self.update_slm_settings(slm_settings)
-            try:
-                self.slm
-            except AttributeError:
-                # logging.info('SLM settings loaded from "{}"'.format(filename))
-                pass
-            else:
-                self.set_holos_from_list(holo_list)
-                logging.info('SLM settings and holograms loaded from "{}"'.format(filename))
-        except (SyntaxError, IndexError):
-            logging.error('Failed to evaluate file "{}". Is the format correct?'.format(filename))
 
     def plot_autoplot_graphs(self):
         """Populates the autoplotter frequency graph with the steps."""

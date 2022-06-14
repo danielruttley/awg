@@ -94,6 +94,20 @@ class RearrangementHandler():
         
         self.generate_segment_ids()
         self.set_start_index(0)
+        
+    def get_state(self):
+        """Gets the current state of the handler. This allows the settings to 
+        be saved for the purposes of saving the overall AWG parameters.
+        
+        """
+        return {'segments':self.segments}
+    
+    def set_state(self,state):
+        """Sets the current state of the handler. This allows the settings to 
+        be set from saved AWG parameters.
+        
+        """
+        self.segments = state['segments']
     
     def generate_segment_ids(self):
         """Generates the potential segment ids to index segments.

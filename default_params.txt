@@ -1,0 +1,190 @@
+{
+    "card_settings": {
+        "active_channels": 1,
+        "sample_rate_Hz": 625000000,
+        "max_output_mV": 200,
+        "number_of_segments": 8,
+        "segment_min_samples": 192,
+        "segment_step_samples": 32
+    },
+    "network_settings": {
+        "ip_address": "localhost",
+        "port": 5684
+    },
+    "amp_adjuster_settings": [
+        {
+            "enabled": true,
+            "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_H_calFile_17.02.2022.txt",
+            "freq_limit_1_MHz": 85,
+            "freq_limit_2_MHz": 110,
+            "amp_limit_1": 0,
+            "amp_limit_2": 1,
+            "non_adjusted_amp_mV": 100
+        },
+        {
+            "enabled": true,
+            "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_V_calFile_17.02.2022.txt",
+            "freq_limit_1_MHz": 85,
+            "freq_limit_2_MHz": 115,
+            "amp_limit_1": 0,
+            "amp_limit_2": 1,
+            "non_adjusted_amp_mV": 100
+        }
+    ],
+    "rearr_settings": {
+        "channel": 0,
+        "start_freq_MHz": [
+            100,
+            101,
+            103
+        ],
+        "target_freq_MHz": [
+            101
+        ]
+    },
+    "datagen_settings": {
+        "button_couple_steps_segments": true,
+        "button_prevent_freq_jumps": false,
+        "button_prevent_amp_jumps": false,
+        "button_freq_adjust_static_segments": true,
+        "button_prevent_phase_jumps": false
+    },
+    "segments": [
+        {
+            "duration_ms": 0.9999872,
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        100.00028000358405
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "Ch0": {
+                "freq": {
+                    "function": "min_jerk",
+                    "start_freq_MHz": [
+                        100
+                    ],
+                    "end_freq_MHz": [
+                        101
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.3
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "Ch0": {
+                "freq": {
+                    "function": "min_jerk",
+                    "start_freq_MHz": [
+                        101
+                    ],
+                    "end_freq_MHz": [
+                        101
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.3
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "Ch0": {
+                "freq": {
+                    "function": "min_jerk",
+                    "start_freq_MHz": [
+                        103
+                    ],
+                    "end_freq_MHz": [
+                        101
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.3
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        101.0002928037479
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            }
+        }
+    ],
+    "steps": [
+        {
+            "segment": 0,
+            "number_of_loops": 1,
+            "after_step": "continue",
+            "rearr": false
+        },
+        {
+            "segment": 1,
+            "number_of_loops": 1,
+            "after_step": "continue",
+            "rearr": true
+        },
+        {
+            "segment": 4,
+            "number_of_loops": 1,
+            "after_step": "continue",
+            "rearr": false
+        }
+    ],
+    "rearr_state": {
+        "segments": [
+            1,
+            2,
+            3
+        ]
+    }
+}
