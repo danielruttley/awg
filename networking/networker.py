@@ -38,6 +38,31 @@ class Networker():
         self.tcp_client.textin.connect(self.recieved_tcp_msg)
         
     def recieved_tcp_msg(self,msg):
+        """Takes the recieved TCP messages and performs the action that 
+        corresponds to that TCP message.
+        
+        Accepted commands (in order of evaluation, * is a wildcard)
+        -----------------------------------------------------------
+        *load* = filename
+            Loads the AWGparams file located in the path defined by filename 
+            (str) into the interface. It then sends this data to the card.
+        *save* = filename
+            Saves the AWGparams loaded into the interface to the path defined 
+            by filename (str). Note that the parameters in the interface are 
+            saved; if these have been changed without updating the card, these
+            might not be the settings currently on the card!
+        *trigger* = None
+            Forces a trigger on the AWG card.
+        *rearrange* = rearrange_occupancy (e.g. 001001)
+            Triggers the segment of the rearrangement step to be updated based 
+            on the rearrange_occupancy (binary string)
+        
+        Other commands are ignored.
+        
+        """
+        # import time
+        # start = time.time()
+        msg = msg.replace('#','')
         logging.info('TCP message recieved: "'+msg+'"')
         try:
             split_msg = msg.split('=')
@@ -49,5 +74,19 @@ class Networker():
         
         if 'load' in command:
             self.main_window.load_params(arg)
-        elif command == 'save_all':
-            self.save_params_file(arg)
+        elif 'save' in command:
+            self.main_window.save_params(arg)
+        elif 'trigger' in command:
+            logging.info('Triggering AWG as requested by TCP command.')
+            self.main_window.awg.trigger()
+        elif 'rearrange' in command:
+            if all(x in '01' for x in arg):
+                logging.info("Rearrangement string '{}' recieved.".format(arg))
+                self.main_window.rearr_recieve(arg)
+                # print('time',time.time()-start)
+            else:
+                logging.error("Invalid rearrangement string '{}' recieved. Message ignored.".format(arg))
+                return
+        else:
+            logging.error("Command '{}' not recognised. Ignoring TCP message.".format(command))
+            return

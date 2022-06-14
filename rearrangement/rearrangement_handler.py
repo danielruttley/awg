@@ -206,12 +206,13 @@ class RearrangementHandler():
                     break
             string = string[:i+1] + '0'*(len(self.start_freq_MHz)-(i+1))
 
-        logging.info('Processed recieved string {} as {}'.format(
-                     recieved_string, string))
+        segment = self.segments[self.occupations.index(string)]
+
+        logging.info('Processed recieved string {} as {} to get '
+                     'rearrangement segment {}'.format(
+                     recieved_string, string, segment))
         
-        print(self.occupations)
-        
-        return self.occupations.index(string)
+        return segment
     
     def get_occupation_freqs(self):
         """Returns the same information as the occupation array but instead 

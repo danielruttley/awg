@@ -5,6 +5,7 @@ import sys
 import os
 import numpy as np
 import json
+from copy import copy
 
 os.system("color")
 
@@ -869,6 +870,51 @@ class MainWindow(QMainWindow):
                 self.rr.steps.append(i)
                 logging.debug('Set step {} to a rearrangement step'.format(i))
         logging.debug('Rearrangement steps: {}'.format(self.rr.steps))
+        
+    def rearr_recieve(self,string):
+        """Accepts a rearrangement binary string from the Networker that it 
+        has recieved over TCP. Asks the rearrangement handler which step 
+        should be updated with which segment, then sends this command to the 
+        AWG class.
+        
+        The next step is set to the index+1. This will cause strange results on
+        the card if the rearrangement step is the last step, but this would be
+        a very 
+        
+        Parameters
+        ----------
+        string : str
+            Occupation string from Pydex. This should be a single string 
+            containing only the characters '0' (unoccupied) and '1' (occupied) 
+            where traps are indexed in the same order as the `start_freq_MHz` 
+            attribute.
+            
+        Returns
+        -------
+        None.
+        
+        """
+        
+        try:
+            rr_segment = self.rr.accept_string(string)
+        except AttributeError:
+            logging.error('Recieved rearrangement string, but rearrangement '
+                          'mode is not active. Ignoring.')
+            return
+        
+        rr_steps = self.rr.steps
+        
+        for step_index in rr_steps:
+            step_params = self.steps[step_index].copy()
+            step_params['segment'] = rr_segment    
+            
+            if step_index == len(self.steps)-1:
+                next_step_index = 0
+            else:
+                next_step_index = step_index+1
+                
+            self.awg._set_step(step_index,**step_params,next_step_index=next_step_index)
+            
             
     def segment_remove_all(self):
         self.segments = []
@@ -987,6 +1033,8 @@ class MainWindow(QMainWindow):
             needs_to_calculate = False
             if (self.rr != None) and (i in self.rr.segments):
                 label = '{} - {}: REARRANGE: duration_ms={}'.format(self.rr.segments[0],self.rr.segments[0]+self.rr.num_segments-1,segment[0].duration_ms)
+                if any([action.needs_to_transfer for segment in self.segments[self.rr.segments[0]:self.rr.segments[0]+self.rr.num_segments] for action in segment]):
+                    label += ' (NEED TO TRANSFER)'
                 for channel in range(self.card_settings['active_channels']):
                     action = segment[channel]
                     label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
