@@ -402,12 +402,8 @@ class AWG():
         -------
         None.
         
-        """ 
-        print('max',max(segment_data))
-        print('min',min(segment_data))        
+        """     
         segment_data /= self.max_output_mV
-        print('max',max(segment_data))
-        print('min',min(segment_data))
         
         if any(segment_data > 1) or any(segment_data < -1):
             logging.warning('Some of the data in segment {} was '
@@ -416,11 +412,6 @@ class AWG():
                             'stay within the bounds.'.format(segment_index,self.max_output_mV))
             segment_data = segment_data.clip(max=1, min=-1)
         segment_data = np.int16(segment_data*2**15)
-        
-        print('segment',segment_index)
-        print(segment_data)
-        print('max',max(segment_data))
-        print('min',min(segment_data))
         
         dwSegmentLenSample = len(segment_data)
         

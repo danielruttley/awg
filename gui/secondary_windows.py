@@ -39,6 +39,8 @@ class CardSettingsWindow(QWidget):
                 widget = QLineEdit()
                 widget.setText(str(self.card_settings[key]))
                 widget.setValidator(QDoubleValidator())
+            if key in ['segment_min_samples','segment_step_samples']:
+                widget.setReadOnly(True)
             self.layout_card_settings.addRow(key, widget)
         layout.addLayout(self.layout_card_settings)
 
@@ -53,6 +55,8 @@ class CardSettingsWindow(QWidget):
             widget = self.layout_card_settings.itemAt(row,1).widget()
             if key in ['active_channels','number_of_segments']:
                 value = int(widget.currentText())
+            elif key in ['sample_rate_Hz','segment_min_samples','segment_step_samples']:
+                value = int(widget.text())
             else:
                 value = float(widget.text())
             new_card_settings[key] = value
@@ -85,7 +89,6 @@ class SegmentCreationWindow(QWidget):
         """
         super().__init__()
         self.main_window = main_window
-        # if edit_holo is None:
         self.setWindowTitle("New segment")
         self.editing_segment = editing_segment
         
@@ -102,8 +105,16 @@ class SegmentCreationWindow(QWidget):
             self.box_duration.setText(str(self.main_window.segments[self.editing_segment][0].duration_ms))
         else:
             self.box_duration.setText(str(1))
-            
         layout_duration.addRow('duration_ms', self.box_duration)
+        
+        self.box_phase_behaviour = QComboBox()
+        self.box_phase_behaviour.addItems(['optimise','continue','manual'])
+        if self.editing_segment is not None:
+            self.box_phase_behaviour.setCurrentText(self.main_window.segments[self.editing_segment][0].phase_behaviour)
+        else:
+            self.box_phase_behaviour.setCurrentText('continue')
+        layout_duration.addRow('phase_behaviour', self.box_phase_behaviour) 
+        
         layout.addLayout(layout_duration)
 
         self.channel_widgets = [SegmentChannelWidget(i,self.main_window,self.editing_segment) for i in range(main_window.card_settings['active_channels'])]
@@ -127,6 +138,8 @@ class SegmentCreationWindow(QWidget):
         """
         segment_params = {}
         segment_params['duration_ms'] = float(self.box_duration.text())
+        segment_params['phase_behaviour'] = self.box_phase_behaviour.currentText()
+        
         success = True
         for channel_widget in self.channel_widgets:
             index = channel_widget.channel_index

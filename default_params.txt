@@ -3,7 +3,7 @@
         "active_channels": 1,
         "sample_rate_Hz": 625000000,
         "max_output_mV": 200,
-        "number_of_segments": 8,
+        "number_of_segments": 64,
         "segment_min_samples": 192,
         "segment_step_samples": 32
     },
@@ -52,6 +52,7 @@
     "segments": [
         {
             "duration_ms": 0.9999872,
+            "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
                     "function": "static",
@@ -72,6 +73,7 @@
         },
         {
             "duration_ms": 0.9999872,
+            "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
                     "function": "min_jerk",
@@ -95,6 +97,7 @@
         },
         {
             "duration_ms": 0.9999872,
+            "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
                     "function": "min_jerk",
@@ -118,6 +121,7 @@
         },
         {
             "duration_ms": 0.9999872,
+            "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
                     "function": "min_jerk",
@@ -141,6 +145,7 @@
         },
         {
             "duration_ms": 0.9999872,
+            "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
                     "function": "static",

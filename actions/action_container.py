@@ -4,6 +4,8 @@ import inspect
 import numpy as np
 from copy import deepcopy
 
+from .phase_minimiser import phase_minimise
+
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
@@ -41,6 +43,31 @@ class ActionContainer():
         calculated when expliticitly requested with the `calculate` method; 
         until this point it will be an empty array with the same size at the 
         `time` attribute.
+    phase_behaviour : {'optimise','continue','manual'}
+        Defines the phase behaviour that this action will take to set the 
+        phases of the tones in the action.
+        
+        Note that 'continue' will only be used if the GUI option to enforce 
+        continuity between segments is set.
+        
+        'optimise': the phases of the tones will be optimise to minimise the 
+                    crest factor of the tone. This will almost certainly cause 
+                    a phase jump from the segment before.
+        'continue': the end phases from the previous segment will be used as 
+                    this segment's starting phases. If more tones are present 
+                    in this segment than before, these phases will be optimised
+                    but the others will be left unchanged. If fewer tones are 
+                    present in this segment than before, the excess phases will
+                    be discarded.
+                    
+                    This flag will cause the MainWindow object to pass through 
+                    the end phases from the previous segment when it is 
+                    calculated. This will prevent phase jumps (definitely in 
+                    cases where the number of tones is conserved, potentially 
+                    not in cases when the number of tones vary).
+        'manual':   The phases manually set when generating the segment will be 
+                    used. This could cause a phase jump if the phases are not 
+                    correctly set.
     needs_to_calculate : bool
         Boolean that contains whether the class has recieved an update to one
         of its parameters that means that data needs to recalculated when 
@@ -72,8 +99,9 @@ class ActionContainer():
     """
     
     def __init__(self,action_params,card_settings,amp_adjuster):
-        print(action_params)
         self.duration_ms = action_params['duration_ms']
+        self.phase_behaviour = action_params['phase_behaviour']
+        
         self.freq_params = action_params['freq']
         self.freq_function_name = self.freq_params.pop('function')
         self.amp_params = action_params['amp']
@@ -111,6 +139,7 @@ class ActionContainer():
         """
         action_params = {}
         action_params['duration_ms'] = self.duration_ms
+        action_params['phase_behaviour'] = self.phase_behaviour
         freq_params = {'function' : self.freq_function_name}
         amp_params = {'function' : self.amp_function_name}
         
@@ -222,9 +251,7 @@ class ActionContainer():
                           'minimum {}'.format(self.duration_ms,
                                               self.card_settings['segment_min_samples']))
             num_samples = self.card_settings['segment_min_samples']
-        print(num_samples)
         num_samples = int(num_samples)
-        print(num_samples)
         self.duration_ms = num_samples*time_step*1e3
         self.time = np.linspace(0,self.duration_ms*1e-3,num_samples+1)
 
@@ -248,6 +275,7 @@ class ActionContainer():
         
         if self.needs_to_calculate:
             self.data = np.zeros_like(self.time)
+            self.end_phase = []
             
             for tone_freq_params,tone_amp_params in zip(self.transpose_params(self.freq_params),self.transpose_params(self.amp_params)):
                 freq_data = self.freq_function(**tone_freq_params)
@@ -256,10 +284,59 @@ class ActionContainer():
                 phase_data = self.calculate_phase(freq_data,tone_freq_params['start_phase'])
                 amp_data_mV = self.amp_adjuster.adjuster(freq_data,amp_data)
                 
-                self.data += amp_data_mV*np.sin(phase_data)#*1e-9
+                self.data += amp_data_mV*np.sin(phase_data*2*np.pi/360)#*1e-9
+                
+                self.end_phase.append(phase_data[-1]%360)
             self.data = self.data[1:]
             self.needs_to_calculate = False
             self.needs_to_transfer = True
+    
+    def set_start_phase(self,phase=None):
+        """Set the start phases to use when calculating the segment. Extra 
+        phases will be discarded and new phases will be added if needed.
+        
+        The available options are described in the phase_behaviour attribute 
+        in the class docstring.
+        
+        Parameters
+        ----------
+        phase : list of float or None
+            The phases to set to if using 'continue' mode. This parameter will 
+            be ignored in other modes. If set to None 'continue' mode will not 
+            be used and the existing phases will be used instead. The default 
+            is None.
+
+        """       
+        if self.phase_behaviour == 'optimise':
+            self.freq_params['start_phase'] = phase_minimise(self.freq_params['start_freq_MHz'],self.amp_params['start_amp'])
+            self.needs_to_calculate = True
+            self.needs_to_transfer = True
+        elif self.phase_behaviour == 'continue':
+            if phase == None:
+                return
+            if len(phase) == len(self.freq_params['start_phase']):
+                self.freq_params['start_phase'] = phase
+            elif len(phase) < len(self.freq_params['start_phase']):
+                self.freq_params['start_phase'] = len(phase) + [0]*(len(self.freq_params['start_phase'])-len(phase))
+            else:
+                self.freq_params['start_phase'] = phase[0:len(self.freq_params['start_phase'])]
+            self.needs_to_calculate = True
+            self.needs_to_transfer = True
+    
+    def get_end_phase(self):
+        """Returns the final phase that this action ends on. For this to be 
+        calculated, the entire action data is calculated and then the final
+        phase is returned. The phase is returned in degrees in the range 
+        0 - 360.        
+
+        Returns
+        -------
+        list of float
+            The final phases of the tones in the action, in radians.
+
+        """
+        self.calculate()
+        return self.end_phase
 
     def calculate_freq(self,freq_params):
         """Calculates the frequency profile with the kwargs in the arguement
@@ -319,7 +396,8 @@ class ActionContainer():
         Returns
         -------
         phases : array
-            `numpy` array containing the phase data for the tone.
+            `numpy` array containing the phase data for the tone. The phase is
+            returned in degrees.
 
         """
         phases = []
@@ -328,7 +406,7 @@ class ActionContainer():
         for i,cur_freq in enumerate(freq_data):
             phases.append(phase)
             if i < len(self.time)-1:
-                phase += 2*np.pi*cur_freq*1e6*(self.time[i+1]-self.time[i])
+                phase += 360*cur_freq*1e6*(self.time[i+1]-self.time[i])
 
         phases = np.asarray(phases)
         return phases
