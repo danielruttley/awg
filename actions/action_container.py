@@ -553,8 +553,51 @@ class ActionContainer():
 
         """
         return [dict(zip(params,t)) for t in zip(*params.values())]
-
-    """
+    
+    def is_freq_changing(self):
+        """Helper function to determine if this segment changes (or is allowed 
+        to change) the frequency of the AWG. Decides this based on if the key 
+        `end_freq_MHz` is in the freq_params dict.
+        
+        Returns
+        -------
+        bool
+            Whether the action can change the frequency of the AWG or not.
+        
+        """
+        
+        return 'end_freq_MHz' in self.freq_params.keys()
+    
+    def is_amp_changing(self):
+        """Helper function to determine if this segment changes (or is allowed 
+        to change) the amplitude of the AWG. Decides this based on if the key 
+        `end_amp` is in the amp_params dict.
+        
+        Returns
+        -------
+        bool
+            Whether the action can change the amplitude of the AWG or not.
+        
+        """
+        
+        return 'end_amp' in self.amp_params.keys()
+    
+    def is_static(self):
+        """Helper function to return whether this action is static in both 
+        frequency and amplitude.
+        
+        This function is used to define whether this action can be set to loop 
+        or not, and for deciding priority when adjusting frequencies.
+        
+        Returns
+        -------
+        bool
+            Whether this action is static in both frequency and amplitude.
+            
+        """
+        return (self.freq_function_name == 'static') and (self.amp_function_name == 'static')
+        
+    """   
     When adding new functions, use start_freq_MHz and start_amp even 
     if the freq/amp remains constant so that the enforced freq/amp 
     continuity is used in the GUI.

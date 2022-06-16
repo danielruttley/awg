@@ -131,8 +131,8 @@ class AWG():
             self.max_sample_rate_Hz = int(1250e6)
         else:
             self.max_sample_rate_Hz = int(625e6)
-            logging.error('Unknown card model. Setting max_sample_rate_Hz = '
-                          '{} S/s'.format(self.max_sample_rate_Hz))
+            logging.error('Unknown AWG card model. Setting max_sample_rate_Hz '
+                          '= {} S/s'.format(self.max_sample_rate_Hz))
         if self.sample_rate_Hz > self.max_sample_rate_Hz:
             self.sample_rate_Hz = self.max_sample_rate_Hz
             logging.error('Sample rate exceeded maximum so has been reduced '

@@ -46,7 +46,7 @@
         "button_couple_steps_segments": true,
         "button_prevent_freq_jumps": false,
         "button_prevent_amp_jumps": false,
-        "button_freq_adjust_static_segments": true,
+        "button_freq_adjust_looped_segments": true,
         "button_prevent_phase_jumps": false
     },
     "segments": [

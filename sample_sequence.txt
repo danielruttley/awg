@@ -46,7 +46,7 @@
         "button_couple_steps_segments": true,
         "button_prevent_freq_jumps": true,
         "button_prevent_amp_jumps": true,
-        "button_freq_adjust_static_segments": true,
+        "button_freq_adjust_looped_segments": true,
         "button_prevent_phase_jumps": false
     },
     "segments": [
@@ -135,7 +135,7 @@
                         102
                     ],
                     "end_freq_MHz": [
-                        101.0002928037479
+                        101
                     ],
                     "start_phase": [
                         0
@@ -156,7 +156,7 @@
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        101.0002928037479
+                        100.99646377368151
                     ],
                     "start_phase": [
                         0
@@ -204,7 +204,7 @@
                         100.99646377368151
                     ],
                     "end_freq_MHz": [
-                        103.99633115303877
+                        103.9966557859703
                     ],
                     "start_phase": [
                         0
@@ -225,7 +225,7 @@
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        103.99633115303877
+                        103.9966557859703
                     ],
                     "start_phase": [
                         0
@@ -264,34 +264,13 @@
             }
         },
         {
-            "duration_ms": 0.0999936,
-            "phase_behaviour": "continue",
-            "Ch0": {
-                "freq": {
-                    "function": "static",
-                    "start_freq_MHz": [
-                        103.9966557859703
-                    ],
-                    "start_phase": [
-                        0
-                    ]
-                },
-                "amp": {
-                    "function": "static",
-                    "start_amp": [
-                        0
-                    ]
-                }
-            }
-        },
-        {
             "duration_ms": 0.9999872,
             "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        103.99633115303877
+                        103.9966557859703
                     ],
                     "start_phase": [
                         0
@@ -315,7 +294,7 @@
                 "freq": {
                     "function": "min_jerk",
                     "start_freq_MHz": [
-                        103.99633115303877
+                        103.9966557859703
                     ],
                     "end_freq_MHz": [
                         100.99646377368151
@@ -412,13 +391,7 @@
         {
             "segment": 11,
             "number_of_loops": 1,
-            "after_step": "continue",
-            "rearr": false
-        },
-        {
-            "segment": 12,
-            "number_of_loops": 1,
-            "after_step": "continue",
+            "after_step": "loop_until_trigger",
             "rearr": false
         }
     ],

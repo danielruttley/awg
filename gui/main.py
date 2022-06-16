@@ -7,6 +7,9 @@ import numpy as np
 import json
 from copy import copy
 
+from itertools import groupby
+from operator import itemgetter
+
 os.system("color")
 
 #from qtpy.QtCore import QThread,Signal,Qt
@@ -49,7 +52,7 @@ color_phase_jump = '#ff000020'
 dicts_to_save = ['card_settings','network_settings','amp_adjuster_settings',
                  'rearr_settings']
 datagen_settings_to_save = ['button_couple_steps_segments','button_prevent_freq_jumps',
-                            'button_prevent_amp_jumps','button_freq_adjust_static_segments',
+                            'button_prevent_amp_jumps','button_freq_adjust_looped_segments',
                             'button_prevent_phase_jumps']
 
 class MainWindow(QMainWindow):
@@ -97,6 +100,7 @@ class MainWindow(QMainWindow):
 
         self.name = name        
         self.last_AWGparam_folder = '.'
+        self.freq_setting_segments = None
         
         self.card_settings = {'active_channels':1}
 
@@ -191,7 +195,8 @@ class MainWindow(QMainWindow):
         layout_prevent_jumps = QGridLayout()
         self.button_couple_steps_segments = QCheckBox("Couple steps with segments")
         self.button_couple_steps_segments.clicked.connect(self.couple_steps_segments)
-        # self.button_couple_steps_segments.setEnabled(False)
+        self.button_couple_steps_segments.setChecked(True)
+        self.button_couple_steps_segments.setEnabled(False)
         layout_prevent_jumps.addWidget(self.button_couple_steps_segments,0,0,1,1)
 
         self.button_prevent_freq_jumps = QCheckBox("Prevent frequency jumps \n(will not edit rearr. segs.)")
@@ -206,16 +211,16 @@ class MainWindow(QMainWindow):
         self.button_prevent_amp_jumps.clicked.connect(self.segment_list_update)
         layout_prevent_jumps.addWidget(self.button_prevent_amp_jumps,2,0,1,1)
 
-        layout_prevent_jumps.addWidget(QLabel("Prevent phase jumps:"),0,1,1,1)
+        # layout_prevent_jumps.addWidget(QLabel("Prevent phase jumps:"),0,1,1,1)
         
-        self.button_freq_adjust_static_segments = QCheckBox("Frequency adjust freq = static and amp = static segments")
-        # self.button_freq_adjust_static_segments.clicked.connect(self.freq_adjust_static_segments)
-        self.button_freq_adjust_static_segments.clicked.connect(self.segment_list_update)
-        layout_prevent_jumps.addWidget(self.button_freq_adjust_static_segments,1,1,1,1)
+        self.button_freq_adjust_looped_segments = QCheckBox("Frequency adjust looped segments")
+        # self.button_freq_adjust_looped_segments.clicked.connect(self.freq_adjust_looped_segments)
+        self.button_freq_adjust_looped_segments.clicked.connect(self.segment_list_update)
+        layout_prevent_jumps.addWidget(self.button_freq_adjust_looped_segments,1,1,1,1)
         
         self.button_prevent_phase_jumps = QCheckBox("Enforce phase continuity between segments")
         self.button_prevent_phase_jumps.setEnabled(False)
-        layout_prevent_jumps.addWidget(self.button_prevent_phase_jumps,2,1,1,1)
+        # layout_prevent_jumps.addWidget(self.button_prevent_phase_jumps,2,1,1,1)
 
         self.layout_datagen.addLayout(layout_prevent_jumps)
 
@@ -234,8 +239,13 @@ class MainWindow(QMainWindow):
         self.layout_datagen.addLayout(rearr_layout)
 
         self.layout_datagen.addWidget(QHLine())
-
-        self.layout_datagen.addWidget(QLabel('<h3>segments<\h3>'))
+        
+        layout_segment_title = QHBoxLayout()
+        layout_segment_title.addWidget(QLabel('<h3>segments<\h3>'))
+        self.button_condense_segment_data = QCheckBox("Condense segment data")
+        self.button_condense_segment_data.clicked.connect(self.write_segment_list_labels)
+        layout_segment_title.addWidget(self.button_condense_segment_data)
+        self.layout_datagen.addLayout(layout_segment_title)
 
         layout_segment_buttons = QHBoxLayout()
 
@@ -400,44 +410,61 @@ class MainWindow(QMainWindow):
                     self._clear_layout(item.layout())
                     
     def load_params(self,filename):
+        """Load the params from a saved .txt file.
+        
+        If rearrangement is active when loading in the file, it is disabled 
+        to remove all but the first rearrangement segment, then re-enabled to
+        ensure the RearrangementHandler is set up correctly.
+        
+        """
         logging.info("Loading AWG params from '{}'.".format(filename))
         
         with open(filename, 'r') as f:
             data = json.load(f)
         
         for name in dicts_to_save:
-            setattr(self,name,data[name])
-            
+            try:
+                if data[name] != getattr(self,name):
+                    logging.debug('Updating attribute {}.'.format(name))
+                    setattr(self,name,data[name])
+                    if name == 'card_settings':
+                        try:
+                            self.awg.close()
+                        except Exception:
+                            logging.debug("Tried to close AWG object but failed. This might be okay if one wasn't expected to exist.")
+                        self.awg = AWG(**self.card_settings)
+            except AttributeError:
+                setattr(self,name,data[name])
+                    
         self.set_datagen_settings(data['datagen_settings'])
         self._create_layout_autoplotter()
-        self.set_amp_adjuster_settings()
-            
-        self.segments = []
-        for segment in data['segments']:
-            self.segment_add(segment)
-            
+        self.set_amp_adjuster_settings(False)
+        
+        self.segment_add_all(data['segments'])
         self.steps = data['steps']
         
-        self.segment_list_update()
-        
+        logging.debug('Setup rearrangement')
         if data['rearr_state'] == None:
             self.rr = None
-            self.button_rearr.setChecked(False)
-        else:
-            self.rr = RearrangementHandler([0],[0])
-            rr_start_index = data['rearr_state']['segments'][0]
-            self.rr.set_state(data['rearr_state'])
+            self.button_rearr.blockSignals(True)
             self.button_rearr.setChecked(False)
             self.rearr_toggle()
+            self.button_rearr.blockSignals(False)
+        else:
+            rr_start_index = data['rearr_state']['segments'][0]
             
-            self.list_segments.setCurrentRow(rr_start_index)
+            for i in data['rearr_state']['segments'][:0:-1]:
+                self.segments.pop(i)
+            for action in self.segments[data['rearr_state']['segments'][0]]:
+                action.rearr = False
+            self.rr = None
+            self.button_rearr.blockSignals(True)
             self.button_rearr.setChecked(True)
+            self.button_rearr.blockSignals(False)
+            self.list_segments.setCurrentRow(rr_start_index)
+            self.rearr_toggle(start_index = rr_start_index)
         
-        try:
-            self.awg.close()
-        except Exception as e:
-            logging.error("Failed to close AWG object. This might be okay if one wasn't expected to exist.")
-        self.awg = AWG(**self.card_settings)
+        logging.debug("Finished loading AWG params from '{}'.".format(filename))
         
     def load_params_dialogue(self):
         filename = QFileDialog.getOpenFileName(self, 'Load AWGparam','.',"Text documents (*.txt)")[0]
@@ -503,9 +530,22 @@ class MainWindow(QMainWindow):
         return settings
     
     def set_datagen_settings(self,settings):
+        """Set the datagen GUI settings when loading in all the parameters 
+        with the load_all function. Signals from the objects are blocked 
+        whilst loading with this method to prevent them triggering as each 
+        of them are set (they are all checked when the segment list is updated 
+        at the end of load_all).
+        
+        Returns
+        -------
+        None.
+        
+        """
         for name,value in settings.items():
             button = getattr(self,name)
+            button.blockSignals(True)
             button.setChecked(value)
+            button.blockSignals(False)
         
     def update_rearr_settings(self,rearr_settings):
         """Update the rearrangement settings with a new dictionary. Called 
@@ -670,6 +710,30 @@ class MainWindow(QMainWindow):
             self.segment_list_update()
             self.list_segments.setCurrentRow(currentRow+1)
     
+    def segment_add_all(self,segment_params_list):
+        """Deletes the current segment list and adds new ones based on the 
+        supplied parameters. Skips all the checks like frequency continuity 
+        until the end.
+        
+        Parameters
+        ----------
+        segment_params_list : list
+              Each entry should be a list of parameters like would be used 
+              in the segment_add function.
+              
+        """
+        self.segments = []
+        for segment_params in segment_params_list:
+            segment = []
+            for channel in range(self.card_settings['active_channels']):
+                channel_params = {}
+                for shared_segment_param in shared_segment_params:
+                    channel_params[shared_segment_param] = segment_params[shared_segment_param]
+                channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
+                action = ActionContainer(channel_params,self.card_settings,self.amp_adjusters[channel])
+                segment.append(action)
+            self.segments.append(segment)
+    
     def segment_add(self,segment_params,editing_segment=None):
         """Add a new segment to the segment list or edits an exisiting 
         segment based on the kwargs in the segment_params dict.
@@ -743,7 +807,7 @@ class MainWindow(QMainWindow):
                 self.segments[editing_segment] = segment
         self.segment_list_update()
 
-    def rearr_toggle(self):
+    def rearr_toggle(self, start_index=None):
         """Converts a sweeping frequency segment into one handled by the
         `RearrangementHandler` class to dynamically change the played segment.
         
@@ -756,10 +820,19 @@ class MainWindow(QMainWindow):
         If another channel is in use, this is unaffected and its parameters 
         will be duplicated across all affected segments.
         
+        Parameters
+        ----------
+        start_index : int or None
+            The index to use as the first rearrangement segment. If None, the 
+            currently selected row in the segment list will be used. The 
+            default is None.
+        
         """
-        #TODO ensure phase continuity is still obeyed.
-        if self.button_rearr.isChecked():       
-            selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
+        if self.button_rearr.isChecked():
+            if start_index != None:
+                selectedRows = [start_index]
+            else:
+                selectedRows = [x.row() for x in self.list_segments.selectedIndexes()]
             if self.rr == None:
                 if len(selectedRows) == 0:
                     logging.error('A segment must be selected before it can be made '
@@ -1075,11 +1148,33 @@ class MainWindow(QMainWindow):
         self.step_list_update()
 
     def segment_list_update(self):
+        """Updates the segment list. This includes updating the parameters of 
+        each action in the list, so things like frequency and amp adjustment 
+        are also done here.
+        
+        To just update the list based on the already set parameters of the 
+        action, use write_segment_list_labels() instead.
+        
+        """
+        
+        self.couple_steps_segments()
+
         self.prevent_amp_jumps()
         self.prevent_freq_jumps()
         
         self.update_needs_to_calculates()
+        self.write_segment_list_labels()
         
+        self.plot_autoplot_graphs()
+        # self.couple_steps_segments()
+        
+    def write_segment_list_labels(self):
+        """Takes the updated segment_list and poplulates it with the correct
+        labels. This has been moved to its own function to allow some GUI 
+        elements to update only the labels without having to do all the 
+        calculations that normally take place when the segment list is updated.
+        
+        """
         for i in range(self.list_segments.count()):
             self.list_segments.takeItem(0)
         for i,segment in enumerate(self.segments):
@@ -1120,8 +1215,6 @@ class MainWindow(QMainWindow):
                     font.setItalic(True)
                     item.setFont(font)
                 self.list_segments.addItem(item)
-            
-        self.couple_steps_segments()
         
     def get_segment_list_label(self,action,segment_number):
         """Returns a string summarising the parameters of the action.
@@ -1143,18 +1236,18 @@ class MainWindow(QMainWindow):
         """
         label = '\n          freq: '+action.freq_function_name + ': '
         for key in action.freq_params.keys():
-            if ((segment_number > 0) and (key == 'start_freq_MHz') and 
-                (self.button_prevent_freq_jumps.isChecked())):
-                pass
-            elif ((segment_number > 0) and (key == 'start_phase') and 
-                  (self.button_prevent_phase_jumps.isChecked())):
-                pass
+            if (self.button_prevent_freq_jumps.isChecked()) and (self.button_condense_segment_data.isChecked()) and (key in ['start_freq_MHz','end_freq_MHz']):
+                if self.freq_setting_segments != None:
+                    if segment_number not in self.freq_setting_segments:
+                        pass
+                    else:
+                        label += key + '=' + str(action.freq_params[key])+', '
             else:
                 label += key + '=' + str(action.freq_params[key])+', '
         label = label[:-2]
         label += '\n          amp: '+action.amp_function_name + ': '
         for key in action.amp_params.keys():
-            if (segment_number > 0) and (key == 'start_amp') and (self.button_prevent_amp_jumps.isChecked()):
+            if (self.button_prevent_amp_jumps.isChecked()) and (segment_number > 0) and (key == 'start_amp') and (self.button_condense_segment_data.isChecked()):
                 pass
             else:
                 label += key + '=' + str(action.amp_params[key])+', '
@@ -1162,6 +1255,7 @@ class MainWindow(QMainWindow):
         return label
 
     def step_list_update(self):
+        logging.debug('Updating step list.')
         self.rearr_step_update()
         
         for i in range(self.list_steps.count()):
@@ -1200,7 +1294,7 @@ class MainWindow(QMainWindow):
         self.w = AmpAdjusterSettingsWindow(self,self.amp_adjuster_settings)
         self.w.show()
         
-    def set_amp_adjuster_settings(self):
+    def set_amp_adjuster_settings(self,update_segment_list=True):
         """Accepts new amp adjuster settings and passes them through to the 
         `AmpAdjuster2D` objects to update their parameters.
         
@@ -1222,6 +1316,7 @@ class MainWindow(QMainWindow):
             `AmpAdjuster2D` class docstring.
         
         """
+        logging.debug('Setting AmpAdjuster settings.')
         new_amp_adjuster_settings = self.amp_adjuster_settings
         if len(new_amp_adjuster_settings) < len(self.amp_adjusters):
             logging.error('Less AmpAdjuster settings are specified that the '
@@ -1240,8 +1335,8 @@ class MainWindow(QMainWindow):
                 action.needs_to_calculate = True
         
         self.refresh_amp_adjuster_settings()
-        self.segment_list_update()
-        self.plot_autoplot_graphs()
+        if update_segment_list:
+            self.segment_list_update()
     
     def update_card_settings(self,card_settings):
         old_card_settings = self.card_settings
@@ -1265,92 +1360,89 @@ class MainWindow(QMainWindow):
         `end_freq_MHz` list of the previous action (or the `start_freq_MHz`
         if that kwarg doesn't exist for the previous action).
         
-        Could clash with the `freq_adjust_static_segments` method because the
-        the static frequency of a segment could be set to a non-adjusted one to
-        enforce frequency continuity. To prevent this, the frequencies are 
-        adjusted for continuity first. Then, static frequency segments are 
-        frequency adjusted, and then given special standing and not adjusted 
-        further, changing the `end_freq_MHz` of the previous segment instead.
+        Firstly, all looped segments are frequency adjusted to prevent phase 
+        slips when the segment loops.
         
-        Note that this means that a frequency jump can still occur if two 
-        static frequencies are successive and different enough to be frequency 
-        adjusted to different values (e.g. if they have different `duration_ms`
-        values).
+        Then, the other frequencies are frequency adjusted around these 
+        segments. The frequency of the looped segments are propogated forwards
+        and backwards along the steps until a frequency change is allowed 
+        as defined by the segment.
         
-        Rearrangement segments are completely unaffected.
+        If two looped segments are found that should have the same adjusted 
+        frequency, but have different durations that prevent them both being 
+        set to the same frequency, there will be a frequency jump. A warning 
+        will be issued in the console.
+        
+        Rearrangement segments are completely unaffected, so a frequency jump 
+        could occur before/after a rearrangement segment. However, a phase jump
+        almost certainly will occur at the rearrangment segment, so the small 
+        amount of heating from a frequency jump is of little consequence.
+        
+        After the frequencies have been made continuous, the looped segments 
+        are readjusted just in case they have been overwritten (this shouldn't 
+        happen unless two looping segments have different durations in the 
+        same adjustment group).
 
         Returns
         -------
         None.
 
         """
-        if self.button_prevent_freq_jumps.isChecked():
-            logging.debug('Preventing frequency jumps.')
-            for i,segment in enumerate(self.segments):
-                if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
-                    for channel in range(self.card_settings['active_channels']):
-                        current_action = segment[channel]
-                        prev_action = self.segments[i-1][channel]
-                        try:
-                            prev_freqs = prev_action.freq_params['end_freq_MHz']
-                        except:
-                            prev_freqs = prev_action.freq_params['start_freq_MHz']
-                        new_start_freqs = []
-                        for tone in range(len(current_action.freq_params['start_freq_MHz'])):
-                            start_freq = current_action.freq_params['start_freq_MHz'][tone]
-                            if not start_freq in prev_freqs:
-                                new_start_freq = min(prev_freqs, key=lambda x:abs(x-start_freq))
-                                logging.info('Changed segment {} Ch{} start_freq_MHz from {} to {} to avoid a frequency jump'.format(i,channel,start_freq,new_start_freq))
-                                new_start_freqs.append(new_start_freq)
-                            else:
-                                new_start_freqs.append(start_freq)       
-                        current_action.update_param('freq','start_freq_MHz',new_start_freqs)
+        if not self.button_prevent_freq_jumps.isChecked():
+            logging.debug('Disabling frequency jump prevention.')
+            self.freq_setting_segments = None
+            return
+                
+        self.freq_adjust_looped_segments()
         
-        self.freq_adjust_static_segments()
-        
-        if self.button_prevent_freq_jumps.isChecked():
-            for i,segment in enumerate(self.segments):
-                if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
-                    for channel in range(self.card_settings['active_channels']):
-                        current_action = segment[channel]
-                        prev_action = self.segments[i-1][channel]
-                        if current_action.freq_function_name == 'static':
-                            current_freqs = current_action.freq_params['start_freq_MHz']
-                            new_prev_seg_end_freqs = []
-                            try:
-                                for tone in range(len(prev_action.freq_params['end_freq_MHz'])):
-                                    end_freq = prev_action.freq_params['end_freq_MHz'][tone]
-                                    print(end_freq)
-                                    if not end_freq in current_freqs:
-                                        new_prev_seg_end_freq = min(current_freqs, key=lambda x:abs(x-end_freq))
-                                        logging.info('Changed segment {} Ch{} end_freq_MHz from {} to {} to avoid a frequency jump'.format(i-1,channel,end_freq,new_prev_seg_end_freq))
-                                        new_prev_seg_end_freqs.append(new_prev_seg_end_freq)
-                                    else:
-                                        new_prev_seg_end_freqs.append(end_freq)       
-                                prev_action.update_param('freq','end_freq_MHz',new_prev_seg_end_freqs)
-                            except Exception:
-                                logging.warning('Might not have prevented '
-                                                'frequency jump due to two '
-                                                'consecutive static segments. '
-                                                'If they were close enough '
-                                                'to be frequency adjusted to '
-                                                'the same frequency, this is '
-                                                'safe to ignore.')
-                        else:
-                            try:
-                                prev_freqs = prev_action.freq_params['end_freq_MHz']
-                            except:
-                                prev_freqs = prev_action.freq_params['start_freq_MHz']
-                            new_start_freqs = []
-                            for tone in range(len(current_action.freq_params['start_freq_MHz'])):
-                                start_freq = current_action.freq_params['start_freq_MHz'][tone]
-                                if not start_freq in prev_freqs:
-                                    new_start_freq = min(prev_freqs, key=lambda x:abs(x-start_freq))
-                                    logging.info('Changed segment {} Ch{} start_freq_MHz from {} to {} to avoid a frequency jump'.format(i,channel,start_freq,new_start_freq))
-                                    new_start_freqs.append(new_start_freq)
-                                else:
-                                    new_start_freqs.append(start_freq)       
-                            current_action.update_param('freq','start_freq_MHz',new_start_freqs)
+        logging.debug('Preventing frequency jumps.')
+        for channel in range(self.card_settings['active_channels']):
+            steps_to_modify = list(range(len(self.steps)))
+            freq_changing_steps = [step_i for step_i in steps_to_modify if self.segments[self.steps[step_i]['segment']][channel].is_freq_changing()]
+            
+            # get the groups of the steps to change to have the same frequency
+            freq_changing_i = [i for i, x in enumerate(steps_to_modify) if x in freq_changing_steps]
+            freq_changing_i = [0] + freq_changing_i + [len(steps_to_modify)]
+            step_groups = []
+            for i in range(len(freq_changing_i)):
+                if i > 0:
+                    step_groups.append(steps_to_modify[freq_changing_i[i-1]:freq_changing_i[i]+1])
+            
+            # remove rearrangement steps so these are not modified
+            rearr_steps = [i for i, step in enumerate(self.steps) if step['rearr']]
+            step_groups = [[x for x in group if x not in rearr_steps] for group in step_groups]
+            
+            # prevent frequency jumps within each group
+            self.freq_setting_segments = [] # record the segments that actually affect the frequency for autoplotting
+            
+            for group in step_groups:
+                looping = [step_i for step_i in group if (self.steps[step_i]['after_step'] == 'loop_until_trigger')]
+                initial_action = self.segments[self.steps[group[0]]['segment']][channel]
+                
+                if len(looping) > 0:
+                    if len(looping) > 1:
+                        durations = [self.segments[self.steps[step_i]['segment']][channel].duration_ms for step_i in group]
+                        if not all(x == durations[0] for x in durations):
+                            logging.warning('Steps {} are looping with different '
+                                            'durations but without a frequency '
+                                            'adjusting step between them. Cannot '
+                                            'prevent a frequency jump.'.format(looping))
+                    looping_action = self.segments[self.steps[looping[0]]['segment']][channel]
+                    freqs_MHz = looping_action.freq_params['start_freq_MHz']
+                    self.freq_setting_segments.append(self.steps[looping[0]]['segment'])
+                    
+                    try:
+                        initial_action.update_param('freq','end_freq_MHz',freqs_MHz)
+                    except NameError:
+                        initial_action.update_param('freq','start_freq_MHz',freqs_MHz)
+                else:
+                    freqs_MHz = initial_action.freq_params['start_freq_MHz']
+                    self.freq_setting_segments.append(self.steps[group[0]]['segment'])
+                    
+                for action in [self.segments[self.steps[step_i]['segment']][channel] for step_i in group][1:]:
+                    action.update_param('freq','start_freq_MHz',freqs_MHz)
+                    
+        self.freq_adjust_looped_segments()
 
     def prevent_amp_jumps(self):
         """Ensures amplitude continuity between segments by ensuring that all
@@ -1383,21 +1475,41 @@ class MainWindow(QMainWindow):
                             else:
                                 new_start_amps.append(start_amp)
                         segment[channel].update_param('amp','start_amp',new_start_amps)
+        else:
+            self.write_segment_list_labels()
             
-    def freq_adjust_static_segments(self):
-        if self.button_freq_adjust_static_segments.isChecked():
-            for i, segment in enumerate(self.segments):
-                for channel in range(self.card_settings['active_channels']):
-                    action = segment[channel]
-                    if (action.freq_function_name == 'static') and (action.amp_function_name == 'static'):
+    def freq_adjust_looped_segments(self):
+        """Frequency adjust segments which correspond to steps that are looped 
+        until a trigger is recieved. This function can only be called when 
+        the steps are coupled with segments, and only static traps can be set 
+        to loop.
+        
+        This behaviour replaces the old approach of frequency adjusting all 
+        static traps, and means that only the segments that actually need to 
+        be frequency adjusted are frequency adjusted.
+        
+        Returns
+        -------
+        None.
+        
+        """
+        logging.debug('Frequency adjusting looped segments.')
+        if self.button_freq_adjust_looped_segments.isChecked():
+            for step_index, step in enumerate(self.steps):
+                if step['after_step'] == 'loop_until_trigger':
+                    segment = self.segments[step['segment']]
+                    for channel, action in enumerate(segment):
                         duration_ms = action.duration_ms
                         adjusted_freqs = []
                         for unadjusted_freq in action.freq_params['start_freq_MHz']:
                             adjusted_freq = round(unadjusted_freq*(duration_ms*1e3))/(duration_ms*1e3)
                             if adjusted_freq != unadjusted_freq:
-                                logging.warning('Adjusted static frequency of segment {} Ch{} from {} to {}'.format(i,channel,unadjusted_freq,adjusted_freq))
+                                logging.warning('Adjusted static frequency of '
+                                                'looping step {} (segment {}) '
+                                                'channel {} from {} to {}'
+                                                ''.format(step_index, step['segment'],channel,unadjusted_freq,adjusted_freq))
                             adjusted_freqs.append(adjusted_freq)
-                        segment[channel].update_param('freq','start_freq_MHz',adjusted_freqs)
+                        segment[channel].update_param('freq','start_freq_MHz',adjusted_freqs)                       
 
     def couple_steps_segments(self):
         """Creates a single step for each segment, with the exception of any
@@ -1442,7 +1554,7 @@ class MainWindow(QMainWindow):
 
         self.button_prevent_freq_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
         self.button_prevent_amp_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
-        # self.button_prevent_phase_jumps.setEnabled(self.button_couple_steps_segments.isChecked())
+        self.button_freq_adjust_looped_segments.setEnabled(self.button_couple_steps_segments.isChecked())
         if not(self.button_couple_steps_segments.isChecked()):
             self.button_prevent_freq_jumps.setChecked(False)
             self.button_prevent_amp_jumps.setChecked(False)
@@ -1461,7 +1573,8 @@ class MainWindow(QMainWindow):
                 else:
                     amp_plot.setLabel(axis='left', text='amplitude')
                 duration_xlabels = {}
-                segment_xlabels = {}
+                freq_segment_xlabels = {}
+                amp_segment_xlabels = {}
                 current_pos = 0
                 for step_index, step in enumerate(self.steps):
                     step_segments = [step['segment']]
@@ -1490,9 +1603,14 @@ class MainWindow(QMainWindow):
                             duration_xlabels[current_pos+0.5] = '{}\n({} loops = {})'.format(action.duration_ms,step['number_of_loops'],action.duration_ms*step['number_of_loops'])
                         else:
                             duration_xlabels[current_pos+0.5] = action.duration_ms
-                        segment_xlabels[current_pos+0.5] = segment
+                        freq_segment_xlabels[current_pos+0.5] = '{}\n{}'.format(segment,action.freq_function_name)
+                        amp_segment_xlabels[current_pos+0.5] = '{}\n{}'.format(segment,action.amp_function_name)
+                        if (self.freq_setting_segments != None) and (segment not in self.freq_setting_segments):
+                            style = Qt.DashLine
+                        else:
+                            style = None 
                         for j,(freq,amp) in enumerate(zip(freqs,amps)):
-                            freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2))
+                            freq_plot.plot(xs,freq, pen=pg.mkPen(color=j,width=2,style=style))
                             amp_plot.plot(xs,amp, pen=pg.mkPen(color=j,width=2))
                         freq_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
                         amp_plot.addItem(pg.InfiniteLine(current_pos,pen={'color': "#000000"}))
@@ -1511,8 +1629,8 @@ class MainWindow(QMainWindow):
                                                                         brush=color_loop_until_trigger,movable=False))
                             current_pos += 0.2
                         
-                freq_plot.getAxis('top').setTicks([segment_xlabels.items()])
-                amp_plot.getAxis('top').setTicks([segment_xlabels.items()])
+                freq_plot.getAxis('top').setTicks([freq_segment_xlabels.items()])
+                amp_plot.getAxis('top').setTicks([amp_segment_xlabels.items()])
                 
                 freq_plot.getAxis('bottom').setTicks([duration_xlabels.items()])
                 amp_plot.getAxis('bottom').setTicks([duration_xlabels.items()])
@@ -1570,10 +1688,17 @@ class MainWindow(QMainWindow):
         else:
             selected_step = selectedRows[0]
             if self.steps[selected_step]['after_step'] == 'continue':
-                self.steps[selected_step]['after_step'] = 'loop_until_trigger'
+                segment = self.segments[self.steps[selected_step]['segment']]
+                if any([not action.is_static() for action in segment]):
+                    logging.error('Only steps corresponding to segments where '
+                                  'all actions are static in both frequency '
+                                  'and amplitude can be set to loop.')
+                else:
+                    self.steps[selected_step]['after_step'] = 'loop_until_trigger'
             else:
                 self.steps[selected_step]['after_step'] = 'continue'
-            self.step_list_update()
+            self.segment_list_update()
+            # self.step_list_update()
             
     def update_needs_to_calculates(self):
         """Iterate through the actions list and check that all segments that 
