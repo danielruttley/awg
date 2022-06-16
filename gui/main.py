@@ -29,7 +29,7 @@ from .secondary_windows import (CardSettingsWindow, SegmentCreationWindow,
 if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from actions import ActionContainer, AmpAdjuster2D
+from actions import ActionContainer, AmpAdjuster2D, shared_segment_params
 from rearrangement import RearrangementHandler
 from awg import AWG
 from networking.networker import Networker
@@ -462,8 +462,8 @@ class MainWindow(QMainWindow):
             segment_data = {}
             for i,action in enumerate(segment):
                 action_params = action.get_action_params()
-                segment_data['duration_ms'] = action_params.pop('duration_ms')
-                segment_data['phase_behaviour'] = action_params.pop('phase_behaviour')
+                for shared_segment_param in shared_segment_params:
+                    segment_data[shared_segment_param] = action_params.pop(shared_segment_param)
                 segment_data['Ch{}'.format(i)] = action_params
             segments_data.append(segment_data)
         
@@ -713,8 +713,9 @@ class MainWindow(QMainWindow):
         self.w = None
         segment = []
         for channel in range(self.card_settings['active_channels']):
-            channel_params = {'duration_ms':segment_params['duration_ms'],
-                              'phase_behaviour':segment_params['phase_behaviour']}
+            channel_params = {}
+            for shared_segment_param in shared_segment_params:
+                channel_params[shared_segment_param] = segment_params[shared_segment_param]
             channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
             action = ActionContainer(channel_params,self.card_settings,self.amp_adjusters[channel])
             segment.append(action)
@@ -921,6 +922,53 @@ class MainWindow(QMainWindow):
                 
             self.awg._set_step(step_index,**step_params,next_step_index=next_step_index)
             
+    def data_recieve(self,channel, segment, param, value, tone_index):
+        """Accepts data recieved from PyDex over TCP from the Networker to 
+        update the data of a single tone in a given action.
+        
+        The data is
+        
+        Parameters
+        ----------
+        channel : int
+            The channel to change the data of.
+        segment : int
+            The segment to change the data of.
+        param : str
+            The function kwarg to change.
+        value : float
+            The value to change the arguement to.
+        tone_index : int
+            The index of the tone to change. This should be a non-negative 
+            integer if only one tone should be changed. If a negative integer 
+            is supplied, all tones will be changed to the given value.
+            
+        Returns
+        -------
+        None.
+        
+        """
+        channel = int(channel)
+        segment = int(segment)
+        tone_index = int(tone_index)
+        
+        logging.info("Changing channel {}, segment {}, parameter '{}', tone {}"
+                     " to {}.".format(channel,segment,param,tone_index,value))
+        
+        if param in shared_segment_params:
+            logging.info('Param {} is shared across all actions in the '
+                         'segment, so all actions will be updated.'.format(param))
+            actions = self.segments[segment]
+        else:
+            actions = [self.segments[segment][channel]]
+        
+        for action in actions:
+            action.update_param_single_tone(param, value, tone_index)
+        
+        self.segment_list_update()
+        
+        #TODO: uncomment the below line to send to the AWG when recieving.
+        # self.calculate_send()
             
     def segment_remove_all(self):
         self.segments = []
@@ -1029,6 +1077,8 @@ class MainWindow(QMainWindow):
     def segment_list_update(self):
         self.prevent_amp_jumps()
         self.prevent_freq_jumps()
+        
+        self.update_needs_to_calculates()
         
         for i in range(self.list_segments.count()):
             self.list_segments.takeItem(0)
@@ -1524,7 +1574,32 @@ class MainWindow(QMainWindow):
             else:
                 self.steps[selected_step]['after_step'] = 'continue'
             self.step_list_update()
-
+            
+    def update_needs_to_calculates(self):
+        """Iterate through the actions list and check that all segments that 
+        need to recalculate are flagged to recalculate. This is important when 
+        using phase continuity because if one segment is changed, all later 
+        segments must be recalculated until the next allowed phase jump.
+        
+        Returns
+        -------
+        None.
+        """
+        
+        for segment_index, segment in enumerate(self.segments):
+            if segment_index > 0:
+                for channel, action in enumerate(segment):
+                    action = segment[channel]
+                    if action.phase_behaviour == 'continue':
+                        prev_action = self.segments[segment_index-1][channel]
+                        if prev_action.needs_to_calculate:
+                            action.needs_to_calculate = True
+                            logging.debug('Channel {}, segment {} needs to '
+                                          'calculate because its '
+                                          'phase_behaviour is '
+                                          'continue and segment {} needs to '
+                                          'calculate.'.format(channel,segment_index,segment_index-1))
+            
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()

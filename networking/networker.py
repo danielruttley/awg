@@ -56,6 +56,9 @@ class Networker():
         *rearrange* = rearrange_occupancy (e.g. 001001)
             Triggers the segment of the rearrangement step to be updated based 
             on the rearrange_occupancy (binary string)
+        *set_data* = [channel (int), segment (int), param (str), value (float),
+                      tone_index (int)]
+            Updates the parameter of a given action with the supplied value. 
         
         Other commands are ignored.
         
@@ -72,7 +75,23 @@ class Networker():
             logging.error("Could not parse command TCP message '{}'. Message ignored.".format(msg))
             return
         
-        if 'load' in command:
+        if 'rearrange' in command:
+            if all(x in '01' for x in arg):
+                logging.info("Rearrangement string '{}' recieved.".format(arg))
+                self.main_window.rearr_recieve(arg)
+                # print('time',time.time()-start)
+            else:
+                logging.error("Invalid rearrangement string '{}' recieved. Message ignored.".format(arg))
+                return
+        elif 'set_data' in command:
+            try:
+                arg = eval(arg)
+                self.main_window.data_recieve(*arg)
+            except NameError:
+                logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
+            except SyntaxError:
+                logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
+        elif 'load' in command:
             self.main_window.load_params(arg)
         elif 'save' in command:
             self.main_window.save_params(arg)

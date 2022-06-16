@@ -2,7 +2,7 @@ import logging
 import sys
 import inspect
 import numpy as np
-from copy import deepcopy
+from copy import copy, deepcopy
 
 from .phase_minimiser import phase_minimise
 
@@ -10,6 +10,8 @@ from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 max_tone_num = 100
+
+shared_segment_params = ['duration_ms','phase_behaviour'] # parameters that have to be shared between actions in the same segment
 
 class ActionContainer():
     """Container for a given single-channel AWG segment containing both phase 
@@ -99,8 +101,8 @@ class ActionContainer():
     """
     
     def __init__(self,action_params,card_settings,amp_adjuster):
-        self.duration_ms = action_params['duration_ms']
-        self.phase_behaviour = action_params['phase_behaviour']
+        for shared_segment_param in shared_segment_params:
+            setattr(self,shared_segment_param,action_params[shared_segment_param])
         
         self.freq_params = action_params['freq']
         self.freq_function_name = self.freq_params.pop('function')
@@ -115,7 +117,6 @@ class ActionContainer():
         self.equalise_param_lengths()
 
         self.calculate_time()
-        self.data = np.empty_like(self.time)
         
         self.amp_adjuster = amp_adjuster
         
@@ -138,8 +139,9 @@ class ActionContainer():
             
         """
         action_params = {}
-        action_params['duration_ms'] = self.duration_ms
-        action_params['phase_behaviour'] = self.phase_behaviour
+        for shared_segment_param in shared_segment_params:
+            action_params[shared_segment_param] = getattr(self,shared_segment_param)
+        
         freq_params = {'function' : self.freq_function_name}
         amp_params = {'function' : self.amp_function_name}
         
@@ -199,6 +201,86 @@ class ActionContainer():
             else:
                 raise NameError('{} is not a parameter for amp_{} function'.format(param,self.amp_function_name))
     
+    def update_param_single_tone(self,param,value,tone_index,target_function=None):
+        """Updates the relvant function dictionary with a new parameter value
+        for a single tone. This is the method that is called when PyDex sends 
+        a TCP message to the `MainWindow` to update a parameter.
+        
+        Parameters
+        ----------
+        param : str
+            The function kwarg to change.
+        value : float
+            The value to change the arguement to.
+        tone_index : int
+            The index of the tone to change. This should be a non-negative 
+            integer if only one tone should be changed. If a negative integer 
+            is supplied, all tones will be changed to the given value.
+        target_function : {'freq','amp',None}
+            The target function to update the parameter of (either the 
+            frequency or amplitude function). If not 'freq' or 'amp', the freq 
+            and amp param dictonaries will be searched for the parameter and 
+            the correct one will be modified, with preference given to the 
+            freq dict. The default is None.
+        """
+        if param == 'duration_ms':
+            self.duration_ms = value
+            self.calculate_time()
+            self.needs_to_calculate = True
+            return
+        elif param == 'phase_behaviour':
+            if value in ['optimise','continue','manual']:
+                self.phase_behaviour = value
+                self.needs_to_calculate = True
+            else:
+                logging.error('{} is not a valid value for {}. '
+                              'Ignoring.'.format(value,param))
+            return         
+        
+        if target_function not in ['freq','amp']:
+            if param in inspect.getfullargspec(self.freq_function)[0]:
+                target_function = 'freq'
+            elif param in inspect.getfullargspec(self.amp_function)[0]:
+                target_function = 'amp'
+            else:
+                logging.error('Parameter {} is not valid for either the '
+                              'frequency or amplitude of this action. Nothing '
+                              'will be changed.'.format(param))
+                return
+        
+        if target_function == 'freq':
+            if param not in inspect.getfullargspec(self.freq_function)[0]:
+                logging.error('{} is not a parameter for freq_{} '
+                              'function'.format(param,self.freq_function_name))
+                return
+            if tone_index < 0:
+                new_values = [value]*len(self.freq_params[param])
+            else:
+                new_values = self.freq_params[param].copy()
+                try:
+                    new_values[tone_index] = value
+                except IndexError:
+                    logging.error('tone_index {} is out of range. Ignoring.'
+                                  ''.format(tone_index))
+                    return
+        else:
+            if param not in inspect.getfullargspec(self.amp_function)[0]:
+                logging.error('{} is not a parameter for amp_{} '
+                              'function'.format(param,self.amp_function_name))
+                return
+            if tone_index < 0:
+                new_values = [value]*len(self.amp_params[param])
+            else:
+                new_values = self.amp_params[param].copy()
+                try:
+                    new_values[tone_index] = value
+                except IndexError:
+                    logging.error('tone_index {} is out of range. Ignoring.'
+                                  ''.format(tone_index))
+                    return
+        
+        self.update_param(target_function,param,new_values)
+    
     def equalise_param_lengths(self):
         """Removes redundant data for when some kwargs are specified to be for
         more tones than others.
@@ -254,6 +336,7 @@ class ActionContainer():
         num_samples = int(num_samples)
         self.duration_ms = num_samples*time_step*1e3
         self.time = np.linspace(0,self.duration_ms*1e-3,num_samples+1)
+        self.data = np.empty_like(self.time)
 
     def calculate(self):
         """

@@ -297,6 +297,15 @@ class AWG():
     def load_all(self,segments,steps):
         """Loads all segment and step data onto the card and then starts it 
         to prepare for playback.
+        
+        All actions will be requested to calculate prior to the data being 
+        sent. If have already been calculated and are eady for transfer, this 
+        will not slow down the data transfer because they will not recalculate.
+        
+        Once an action has been trasferred the flag needs_to_transfer in the 
+        ActionContainer will be marked as False. This will mean that the data 
+        is not tranferred again unless the is flag is reset to True, such as 
+        when the action is recalculated.
 
         Parameters
         ----------
@@ -305,14 +314,6 @@ class AWG():
             list is the data for the segment of the same index, and is itself 
             a list. Within these lists are ActionContainer objects, the index 
             of which refers to the channel the data should be outputted on.
-            
-            This method will request that the data within the ActionContainers 
-            is calculated, but this calculation will only be preformed if the 
-            container parameters have been changed since the last calculation.
-            
-            ActionContainers keep track of whether they need to actually 
-            transfer to the AWG. If they report that they don't need to 
-            transfer, then the transfer will be skipped.
         steps : list of dicts
             The list of dicts from the MainWindow class that defines the steps.
             Steps are loaded sequentially, apart from the last step which is 
@@ -325,9 +326,10 @@ class AWG():
         """
         for segment_index,segment in enumerate(segments):
             segment_data = []
+            for action in segment:
+                action.calculate()
             if any([action.needs_to_transfer for action in segment]):
                 for action in segment:
-                    action.calculate()
                     segment_data.append(action.data)
                 segment_data = self._multiplex(segment_data)
                 self._set_segment(segment_index,segment_data)
