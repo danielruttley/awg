@@ -14,6 +14,8 @@ try:
 except ImportError:
     from PyQt5.QtCore import QThread, pyqtSignal
     from PyQt5.QtWidgets import QApplication 
+    
+enco = 'mbcs'
 
 def reset_slot(signal, slot, reconnect=True):
     """Make sure all instances of slot are disconnected

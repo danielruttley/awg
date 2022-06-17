@@ -1,8 +1,8 @@
 {
     "card_settings": {
-        "active_channels": 1,
+        "active_channels": 2,
         "sample_rate_Hz": 625000000,
-        "max_output_mV": 200,
+        "max_output_mV": 200.0,
         "number_of_segments": 64,
         "segment_min_samples": 192,
         "segment_step_samples": 32
@@ -38,7 +38,7 @@
         "start_freq_MHz": [
             100,
             101,
-            102
+            103
         ],
         "target_freq_MHz": [
             101
@@ -54,43 +54,57 @@
     "segments": [
         {
             "duration_ms": 0.9999872,
-            "phase_behaviour": "optimise",
+            "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        100.00028000358405,
-                        101.0002928037479,
-                        102.00030560391174
+                        100.00028000358405
                     ],
                     "start_phase": [
-                        0,
-                        0,
                         0
                     ]
                 },
                 "amp": {
                     "function": "static",
                     "start_amp": [
-                        0.3,
-                        0.3,
-                        0.3
+                        1
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
                     ]
                 }
             }
         },
         {
             "duration_ms": 0.9999872,
-            "phase_behaviour": "optimise",
+            "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
-                    "function": "min_jerk",
+                    "function": "sweep",
                     "start_freq_MHz": [
                         100
                     ],
                     "end_freq_MHz": [
                         101
                     ],
+                    "hybridicity": [
+                        0.2
+                    ],
                     "start_phase": [
                         0
                     ]
@@ -99,6 +113,111 @@
                     "function": "static",
                     "start_amp": [
                         0.3
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "sweep",
+                    "start_freq_MHz": [
+                        101
+                    ],
+                    "end_freq_MHz": [
+                        101
+                    ],
+                    "hybridicity": [
+                        0.2
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.3
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "sweep",
+                    "start_freq_MHz": [
+                        103
+                    ],
+                    "end_freq_MHz": [
+                        101
+                    ],
+                    "hybridicity": [
+                        0.2
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.3
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
                     ]
                 }
             }
@@ -108,81 +227,108 @@
             "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
-                    "function": "min_jerk",
+                    "function": "static",
                     "start_freq_MHz": [
-                        101
-                    ],
-                    "end_freq_MHz": [
-                        101
+                        101.0002928037479
                     ],
                     "start_phase": [
                         0
                     ]
                 },
                 "amp": {
-                    "function": "static",
-                    "start_amp": [
-                        0.3
-                    ]
-                }
-            }
-        },
-        {
-            "duration_ms": 0.9999872,
-            "phase_behaviour": "optimise",
-            "Ch0": {
-                "freq": {
-                    "function": "min_jerk",
-                    "start_freq_MHz": [
-                        102
-                    ],
-                    "end_freq_MHz": [
-                        101
-                    ],
-                    "start_phase": [
-                        0
-                    ]
-                },
-                "amp": {
-                    "function": "static",
-                    "start_amp": [
-                        0.3
-                    ]
-                }
-            }
-        },
-        {
-            "duration_ms": 0.9999872,
-            "phase_behaviour": "optimise",
-            "Ch0": {
-                "freq": {
-                    "function": "static",
-                    "start_freq_MHz": [
-                        100.99646377368151
-                    ],
-                    "start_phase": [
-                        0
-                    ]
-                },
-                "amp": {
-                    "function": "ramp",
+                    "function": "approx_exp",
                     "start_amp": [
                         0.3
                     ],
                     "end_amp": [
                         1
+                    ],
+                    "index": [
+                        20
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
                     ]
                 }
             }
         },
         {
-            "duration_ms": 0.0999936,
+            "duration_ms": 0.9999872,
             "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        100.99646377368151
+                        101.0002928037479
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.9999872,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        101.0002928037479
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.00033120423943
                     ],
                     "start_phase": [
                         0
@@ -203,10 +349,10 @@
                 "freq": {
                     "function": "min_jerk",
                     "start_freq_MHz": [
-                        100.99646377368151
+                        101.0002928037479
                     ],
                     "end_freq_MHz": [
-                        103.9966557859703
+                        101.0002928037479
                     ],
                     "start_phase": [
                         0
@@ -218,88 +364,18 @@
                         1
                     ]
                 }
-            }
-        },
-        {
-            "duration_ms": 0.9999872,
-            "phase_behaviour": "continue",
-            "Ch0": {
+            },
+            "Ch1": {
                 "freq": {
-                    "function": "static",
+                    "function": "sweep",
                     "start_freq_MHz": [
-                        103.9966557859703
-                    ],
-                    "start_phase": [
-                        0
-                    ]
-                },
-                "amp": {
-                    "function": "ramp",
-                    "start_amp": [
-                        1
-                    ],
-                    "end_amp": [
-                        0
-                    ]
-                }
-            }
-        },
-        {
-            "duration_ms": 0.0999936,
-            "phase_behaviour": "continue",
-            "Ch0": {
-                "freq": {
-                    "function": "static",
-                    "start_freq_MHz": [
-                        103.9966557859703
-                    ],
-                    "start_phase": [
-                        0
-                    ]
-                },
-                "amp": {
-                    "function": "static",
-                    "start_amp": [
-                        0
-                    ]
-                }
-            }
-        },
-        {
-            "duration_ms": 0.9999872,
-            "phase_behaviour": "continue",
-            "Ch0": {
-                "freq": {
-                    "function": "static",
-                    "start_freq_MHz": [
-                        103.9966557859703
-                    ],
-                    "start_phase": [
-                        0
-                    ]
-                },
-                "amp": {
-                    "function": "ramp",
-                    "start_amp": [
-                        0
-                    ],
-                    "end_amp": [
-                        1
-                    ]
-                }
-            }
-        },
-        {
-            "duration_ms": 0.9999872,
-            "phase_behaviour": "continue",
-            "Ch0": {
-                "freq": {
-                    "function": "min_jerk",
-                    "start_freq_MHz": [
-                        103.9966557859703
+                        104.00033120423943
                     ],
                     "end_freq_MHz": [
-                        100.99646377368151
+                        108.0003824048948
+                    ],
+                    "hybridicity": [
+                        0.2
                     ],
                     "start_phase": [
                         0
@@ -314,13 +390,30 @@
             }
         },
         {
-            "duration_ms": 0.0999936,
+            "duration_ms": 0.9999872,
             "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        100.99646377368151
+                        101.0002928037479
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        108.0003824048948
                     ],
                     "start_phase": [
                         0
@@ -374,24 +467,6 @@
         },
         {
             "segment": 8,
-            "number_of_loops": 1,
-            "after_step": "loop_until_trigger",
-            "rearr": false
-        },
-        {
-            "segment": 9,
-            "number_of_loops": 1,
-            "after_step": "continue",
-            "rearr": false
-        },
-        {
-            "segment": 10,
-            "number_of_loops": 1,
-            "after_step": "continue",
-            "rearr": false
-        },
-        {
-            "segment": 11,
             "number_of_loops": 1,
             "after_step": "loop_until_trigger",
             "rearr": false

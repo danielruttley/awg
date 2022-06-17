@@ -8,8 +8,10 @@
         "segment_step_samples": 32
     },
     "network_settings": {
-        "ip_address": "localhost",
-        "port": 5684
+        "client_ip": "localhost",
+        "client_port": 5063,
+	"server_ip": "",
+        "server_port": 5064
     },
     "amp_adjuster_settings": [
         {

@@ -18,5 +18,7 @@ def convert_str_to_list(string):
     string = str(string)
     string = string.replace('[','')
     string = string.replace(']','')
+    if string == '':
+        raise Exception
     string = '['+string+']'
     return eval(string)

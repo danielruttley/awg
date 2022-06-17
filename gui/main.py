@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         the other relies on.
         
     """
-    def __init__(self,name='AWG1',params_filename='default_params.txt',dev_mode=False):
+    def __init__(self,name='AWG1',params_filename='default_params.txt'):
         super().__init__()
 
         self.name = name        
@@ -122,7 +122,7 @@ class MainWindow(QMainWindow):
         self.steps = []
         
         self.load_params(params_filename)
-        self.networker = Networker(main_window=self,server_name=self.name,**self.network_settings)
+        self.networker = Networker(main_window=self,**self.network_settings)
 
     def _create_menu_bar(self):
         action_load_params = QAction(self)

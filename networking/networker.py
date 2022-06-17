@@ -1,13 +1,24 @@
 import logging
 from .client import PyClient
+from .server import PyServer
 
 class Networker():
-    """Handles the PyClient and calls the correct methods of the parent 
-    window class when the correct message is recieved via TCP message.
+    """Handles the PyClient to recieve TCP messages from Dexter before calling 
+    the correct method of the main_window class.
+    
+    Also handles the PyServer to respond to PyDex when a response is needed 
+    such as when loading in files from a TCP command.
+    
+    Attributes
+    ----------
+    client : PyClient
+        The client to recieve the TCP messages from PyDex.
+    server : PyServer
+        The server to respond to PyDex when needed.
     
     """
     
-    def __init__(self,main_window,ip_address,port,server_name):
+    def __init__(self,main_window,client_ip,client_port,server_ip,server_port):
         """Defines the class, including setting up the TCP server.
 
         Parameters
@@ -17,12 +28,19 @@ class Networker():
             through this reference allows the networker to call the relevant 
             methods of the MainWindow when the correct TCP message is 
             recieved.
-        ip_address : str
+        client_ip : str
             The IP address for the client to listen for messages from. This 
             should typically be the address of the PyDex PC.
-        port : int
-            The port of the TCP server.
-        server_name : str
+        client_port : int
+            The port for the client to listen for messages from. This 
+            should typically be the port that the PyDex PC is using.
+        server_ip : str
+            The IP address for the server to send messages from. This should 
+            typically be ''.
+        server_port : int
+            The port for the client to listen for messages from. This 
+            should typically be the port that the PyDex PC is using.
+        client_name : str
             The name of the TCP server.
 
         Returns
@@ -33,9 +51,12 @@ class Networker():
         
         self.main_window = main_window
         
-        self.tcp_client = PyClient(host=ip_address,port=int(port),name=server_name)
-        self.tcp_client.start()
-        self.tcp_client.textin.connect(self.recieved_tcp_msg)
+        self.client = PyClient(host=client_ip,port=int(client_port))
+        self.client.start()
+        self.client.textin.connect(self.recieved_tcp_msg)
+        
+        self.server = PyServer(host=server_ip, port=int(server_port)) # TCP server to message PyDex
+        self.server.start()
         
     def recieved_tcp_msg(self,msg):
         """Takes the recieved TCP messages and performs the action that 
@@ -91,6 +112,7 @@ class Networker():
                 logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
             except SyntaxError:
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
+            self.server.add_message(1,'go'*1000)
         elif 'load' in command:
             self.main_window.load_params(arg)
         elif 'save' in command:
