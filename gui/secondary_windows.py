@@ -327,10 +327,29 @@ class SegmentChannelWidget(QWidget):
         return success, freq_params, amp_params
 
 class StepCreationWindow(QWidget):
-    def __init__(self,mainWindow):
+    def __init__(self,main_window,editing=None):
+        """Widget for defining the parameters of a step.
+        
+        Parameters
+        ----------
+        editing : None or int
+            The segment currently being edited. None will cause the parameters
+            to be set to their default values, whilst int will autopopulate the
+            parameters from the relevant `ActionContainer` object if the 
+            function is correct.
+
+        Returns
+        -------
+        None.
+
+        """
         super().__init__()
-        self.mainWindow = mainWindow
-        self.setWindowTitle("New step")
+        self.main_window = main_window
+        self.editing = editing
+        self.setWindowTitle('New step')
+        
+        if self.editing != None:
+            self.setWindowTitle('Editing step {}'.format(editing))
 
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -346,25 +365,35 @@ class StepCreationWindow(QWidget):
                 widget = QComboBox()
                 widget.addItems(after_step_options)
                 widget.setCurrentText(after_step_options[0])
+                if self.editing != None:
+                    widget.setCurrentText(self.main_window.steps[editing][key])
             elif key == 'rearr':
                 widget = QComboBox()
                 widget.addItems(rearr_options)
                 widget.setCurrentText(after_step_options[0])
+                if self.editing != None:
+                    widget.setCurrentText(str(self.main_window.steps[editing][key]))
             else:
                 widget = QLineEdit()
                 if key == 'number_of_loops':
                     widget.setText(str(1))
                 else:
                     widget.setText(str(0))
+                if self.editing != None:
+                    widget.setText(str(self.main_window.steps[editing][key]))
                 widget.setValidator(QIntValidator())
             self.layout_step_settings.addRow(key, widget)
         layout.addLayout(self.layout_step_settings)
 
-        self.button_save = QPushButton("Add")
-        self.button_save.clicked.connect(self.update_card_settings)
+        if self.editing != None:
+            self.button_save = QPushButton("Edit")
+        else:
+            self.button_save = QPushButton("Add")
+            
+        self.button_save.clicked.connect(self.update_step_settings)
         layout.addWidget(self.button_save)
            
-    def update_card_settings(self):
+    def update_step_settings(self):
         step_params = {}
         for row in range(self.layout_step_settings.rowCount()):
             key = self.layout_step_settings.itemAt(row,0).widget().text()
@@ -376,7 +405,8 @@ class StepCreationWindow(QWidget):
             else:
                 value = int(widget.text())
             step_params[key] = value
-        self.mainWindow.step_add(step_params)
+        
+        self.main_window.step_add(step_params,self.editing)
 
 class RearrSettingsWindow(QWidget):
     def __init__(self,mainWindow,rearr_settings):
@@ -528,7 +558,6 @@ class AmpAdjusterSettingsChannelWidget(QWidget):
         filename = QFileDialog.getOpenFileName(self, 'Load channel {} AmpAdjust calibration'.format(self.channel),'.',"Text documents (*.txt)")[0]
         if filename != '':
             self.label_filename.setText(filename)
-            # self.last_SLMparam_folder = os.path.dirname(filename)
     
     def get_settings(self):
         """Returns the settings of the AmpAdjuster channel as a dictionary to 

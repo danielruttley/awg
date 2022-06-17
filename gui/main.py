@@ -195,13 +195,13 @@ class MainWindow(QMainWindow):
         self.button_couple_steps_segments.setEnabled(False)
         layout_prevent_jumps.addWidget(self.button_couple_steps_segments,0,0,1,1)
 
-        self.button_prevent_freq_jumps = QCheckBox("Prevent frequency jumps \n(will not edit rearr. segs.)")
+        self.button_prevent_freq_jumps = QCheckBox("Prevent frequency jumps \n(will not edit rearr. segs. for rearr. channel)")
         self.button_prevent_freq_jumps.setEnabled(False)
         # self.button_prevent_freq_jumps.clicked.connect(self.prevent_freq_jumps)
         self.button_prevent_freq_jumps.clicked.connect(self.segment_list_update)
         layout_prevent_jumps.addWidget(self.button_prevent_freq_jumps,1,0,1,1)
 
-        self.button_prevent_amp_jumps = QCheckBox("Prevent amplitude jumps \n(will not edit rearr. segs.)")
+        self.button_prevent_amp_jumps = QCheckBox("Prevent amplitude jumps \n(will not edit rearr. segs. for rearr. channel)")
         self.button_prevent_amp_jumps.setEnabled(False)
         # self.button_prevent_amp_jumps.clicked.connect(self.prevent_amp_jumps)
         self.button_prevent_amp_jumps.clicked.connect(self.segment_list_update)
@@ -295,8 +295,7 @@ class MainWindow(QMainWindow):
         self.button_step_edit = QPushButton()
         self.button_step_edit.setIcon(QIcon(":edit.svg"))
         self.button_step_edit.clicked.connect(self.step_edit)
-        self.button_step_edit.setEnabled(False)
-        # layout_step_buttons.addWidget(self.button_step_edit)
+        layout_step_buttons.addWidget(self.button_step_edit)
         
         self.button_step_up = QPushButton()
         self.button_step_up.setIcon(QIcon(":up.svg"))
@@ -633,6 +632,11 @@ class MainWindow(QMainWindow):
                                 action.needs_to_transfer = True
                         if (self.rr != None) and all(row < i for i in self.rr.segments):
                             self.rr.segments = [i-1 for i in self.rr.segments]
+                        if self.button_couple_steps_segments.isChecked():
+                            step_index = self.get_step_from_segment(row)
+                            del self.steps[step_index]
+                            for step in self.steps[step_index:]:
+                                step['segment'] = step['segment'] - 1
                     except IndexError:
                         pass
             self.segment_list_update()
@@ -663,6 +667,11 @@ class MainWindow(QMainWindow):
                                   'rearrangement segments. Turn off '
                                   'rearrangement first.')
                     return
+            if self.button_couple_steps_segments.isChecked():
+                step_index = self.get_step_from_segment(currentRow)
+                self.steps[step_index]['segment'] = self.steps[step_index]['segment'] - 1
+                self.steps[step_index-1]['segment'] = self.steps[step_index-1]['segment'] + 1
+                self.steps[step_index],self.steps[step_index-1] = self.steps[step_index-1],self.steps[step_index]
             self.segments[current_segment],self.segments[current_segment-1] = self.segments[current_segment-1],self.segments[current_segment]
             for segment in self.segments[current_segment-1:current_segment+1]:
                 for action in segment:
@@ -704,6 +713,11 @@ class MainWindow(QMainWindow):
                                   'rearrangement segments. Turn off '
                                   'rearrangement first.')
                     return
+            if self.button_couple_steps_segments.isChecked():
+                step_index = self.get_step_from_segment(currentRow)
+                self.steps[step_index]['segment'] = self.steps[step_index]['segment'] + 1
+                self.steps[step_index+1]['segment'] = self.steps[step_index+1]['segment'] - 1
+                self.steps[step_index],self.steps[step_index+1] = self.steps[step_index+1],self.steps[step_index]
             self.segments[current_segment],self.segments[current_segment+1] = self.segments[current_segment+1],self.segments[current_segment]
             for segment in self.segments[current_segment:current_segment+2]:
                 for action in segment:
@@ -797,6 +811,14 @@ class MainWindow(QMainWindow):
                     action.needs_to_transfer = True
             if (self.rr != None) and all(selected_row < i for i in self.rr.segments):
                 self.rr.segments = [i+1 for i in self.rr.segments]
+            if self.button_couple_steps_segments.isChecked():
+                step_index = self.get_step_from_segment(selected_row)
+                self.steps.insert(step_index,{'segment': selected_row+1, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
+                try:
+                    for step in self.steps[step_index+1:]:
+                        step['segment'] = step['segment'] + 1
+                except IndexError:
+                    pass
         else:
             if (self.rr != None) and (editing_segment in self.rr.segments):
                 base_rr_segment = self.rr.segments[0]
@@ -1024,7 +1046,12 @@ class MainWindow(QMainWindow):
         """
         channel = int(channel)
         segment = int(segment)
-        tone_index = int(tone_index)
+        try:
+            tone_index = int(tone_index)
+        except ValueError:
+            logging.debug('tone_index {} not valid integer. Setting to '
+                          '-1 (will affect all tones).'.format(tone_index))
+            tone_index = -1
         
         logging.info("Changing channel {}, segment {}, parameter '{}', tone {}"
                      " to {}.".format(channel,segment,param,tone_index,value))
@@ -1042,7 +1069,11 @@ class MainWindow(QMainWindow):
                               'segment, so all actions will be updated.'.format(param))
                 actions = self.segments[segment]
             else:
-                actions = [self.segments[segment][channel]]
+                try:
+                    actions = [self.segments[segment][channel]]
+                except IndexError:
+                    logging.error('Channel {} is not active. Ignoring.'.format(channel))
+                    return
             
             for action in actions:
                 action.update_param_single_tone(param, value, tone_index)
@@ -1122,12 +1153,18 @@ class MainWindow(QMainWindow):
                 self.step_list_update()
                 self.list_steps.setCurrentRow(currentRow+1)
     
-    def step_add(self,step_params):
+    def step_add(self,step_params,edit_index=None):
         """Adds a step with the parameters passed through to the function.
         
         If rearrangement mode is active and one of the rearrangement 
         segments is chosen, the step will default to the first rearrangement 
         segment and the rearr boolean will be set to True.
+        
+        Parameters
+        ----------
+        edit_index : None or int
+            The step to overwrite with the new params. If None a new step will 
+            be added instead. The default is None.
         
         """
         self.w = None
@@ -1152,7 +1189,10 @@ class MainWindow(QMainWindow):
                           'no rearrangement segments. Turning rearrangement '
                           'toggle off.'.format(selected_row))
             step_params['rearr'] = False
-        self.steps.insert(selected_row+1,step_params)
+        if edit_index != None:
+            self.steps[edit_index] = step_params
+        else:
+            self.steps.insert(selected_row+1,step_params)
         self.step_list_update()
     
     def step_remove_all(self):
@@ -1439,7 +1479,8 @@ class MainWindow(QMainWindow):
             
             # prevent frequency jumps within each group            
             for group in step_groups:
-                looping = [step_i for step_i in group if (self.steps[step_i]['after_step'] == 'loop_until_trigger')]
+                looping = [step_i for step_i in group if ((self.steps[step_i]['after_step'] == 'loop_until_trigger') or
+                                                          (self.steps[step_i]['number_of_loops'] > 1))]
                 initial_action = self.segments[self.steps[group[0]]['segment']][channel]
                 
                 if len(looping) > 0:
@@ -1523,7 +1564,7 @@ class MainWindow(QMainWindow):
         logging.debug('Frequency adjusting looped segments.')
         if self.button_freq_adjust_looped_segments.isChecked():
             for step_index, step in enumerate(self.steps):
-                if step['after_step'] == 'loop_until_trigger':
+                if (step['after_step'] == 'loop_until_trigger') or (step['number_of_loops']>1):
                     segment = self.segments[step['segment']]
                     for channel, action in enumerate(segment):
                         duration_ms = action.duration_ms
@@ -1627,9 +1668,9 @@ class MainWindow(QMainWindow):
                             amp_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
                                                                         brush=color_loop_background,movable=False,
                                                                         span = (0.8,1)))
-                            duration_xlabels[current_pos+0.5] = '{}\n({} loops = {})'.format(action.duration_ms,step['number_of_loops'],action.duration_ms*step['number_of_loops'])
+                            duration_xlabels[current_pos+0.5] = '{:.3f}\n({} loops = {:.3f})'.format(action.duration_ms,step['number_of_loops'],action.duration_ms*step['number_of_loops'])
                         else:
-                            duration_xlabels[current_pos+0.5] = action.duration_ms
+                            duration_xlabels[current_pos+0.5] = '{:.3f}'.format(action.duration_ms)
                         freq_segment_xlabels[current_pos+0.5] = '{}\n{}'.format(segment,action.freq_function_name)
                         amp_segment_xlabels[current_pos+0.5] = '{}\n{}'.format(segment,action.amp_function_name)
                         if (self.freq_setting_segments != None) and (segment not in self.freq_setting_segments[channel]):
@@ -1754,6 +1795,30 @@ class MainWindow(QMainWindow):
                                           'phase_behaviour is '
                                           'continue and segment {} needs to '
                                           'calculate.'.format(channel,segment_index,segment_index-1))
+                            
+    def get_step_from_segment(self,segment_index):
+        """Helper function to get the index of the first matching step for a 
+        given segment index.
+        
+        Parameters
+        ----------
+        segment_index : int
+            The index of the segment to find the first matching step for.
+        
+        Returns
+        -------
+        int or None.
+            The index of the first matching step. None is returned if the 
+            segment does not have a matching step.
+        """
+        
+        try:
+            step_index = [step['segment'] for step in self.steps].index(segment_index)
+            logging.debug("Segment {}'s first match is step {}.".format(segment_index,step_index))
+            return step_index
+        except ValueError:
+            logging.debug('Segment {} does not have a matching step.'.format(segment_index))
+            return None
             
 if __name__ == '__main__':
     app = QApplication(sys.argv)
