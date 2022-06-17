@@ -5,10 +5,6 @@ import sys
 import os
 import numpy as np
 import json
-from copy import copy
-
-from itertools import groupby
-from operator import itemgetter
 
 os.system("color")
 
@@ -465,6 +461,9 @@ class MainWindow(QMainWindow):
             self.rearr_toggle(start_index = rr_start_index)
         
         logging.debug("Finished loading AWG params from '{}'.".format(filename))
+    
+        #TODO: uncomment the below line to send to the AWG when loading.
+        # self.calculate_send()
         
     def load_params_dialogue(self):
         filename = QFileDialog.getOpenFileName(self, 'Load AWGparam','.',"Text documents (*.txt)")[0]
@@ -579,8 +578,10 @@ class MainWindow(QMainWindow):
         self.rearr_toggle()
     
     def calculate_all_segments(self):
+        logging.debug('Calculating all segments.')
         for segment_index, segment in enumerate(self.segments):
             for action_index, action in enumerate(segment):
+                logging.debug('Calculating segment {}, channel {}.'.format(segment_index,action_index))
                 if segment_index == 0:
                     action.set_start_phase(None)
                 else:
@@ -1028,15 +1029,23 @@ class MainWindow(QMainWindow):
         logging.info("Changing channel {}, segment {}, parameter '{}', tone {}"
                      " to {}.".format(channel,segment,param,tone_index,value))
         
-        if param in shared_segment_params:
-            logging.info('Param {} is shared across all actions in the '
-                         'segment, so all actions will be updated.'.format(param))
-            actions = self.segments[segment]
+        if (self.rr != None) and (segment in self.rr.segments):
+            segments = self.rr.segments
+            logging.info('Segment {} is a rearrangement segment, so all '
+                         'rearrangement segments will be changed.'.format(segment))
         else:
-            actions = [self.segments[segment][channel]]
+            segments = [segment]
         
-        for action in actions:
-            action.update_param_single_tone(param, value, tone_index)
+        for segment in segments:
+            if param in shared_segment_params:
+                logging.debug('Param {} is shared across all actions in the '
+                              'segment, so all actions will be updated.'.format(param))
+                actions = self.segments[segment]
+            else:
+                actions = [self.segments[segment][channel]]
+            
+            for action in actions:
+                action.update_param_single_tone(param, value, tone_index)
         
         self.segment_list_update()
         
@@ -1045,9 +1054,12 @@ class MainWindow(QMainWindow):
             
     def segment_remove_all(self):
         self.segments = []
+        self.steps = []
         self.rr = None
+        self.button_rearr.blockSignals(True)
         self.button_rearr.setChecked(False)
-        self.segment_list_update()
+        self.button_rearr.blockSignals(False)
+        self.rearr_toggle()
 
     def step_add_dialogue(self):
         self.w = StepCreationWindow(self)
@@ -1187,7 +1199,7 @@ class MainWindow(QMainWindow):
                     label += ' (NEED TO TRANSFER)'
                 for channel in range(self.card_settings['active_channels']):
                     action = segment[channel]
-                    label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
+                    label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i,channel)
                     if action.needs_to_calculate:
                         needs_to_calculate = True
                 item.setText(label)
@@ -1206,7 +1218,7 @@ class MainWindow(QMainWindow):
                     label += ' (NEEDS TO TRANSFER)'
                 for channel in range(self.card_settings['active_channels']):
                     action = segment[channel]
-                    label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i)
+                    label += '\n     Ch{}:'.format(channel) + self.get_segment_list_label(action,i,channel)
                     item.setText(label)
                     if action.needs_to_calculate:
                         needs_to_calculate = True
@@ -1216,7 +1228,7 @@ class MainWindow(QMainWindow):
                     item.setFont(font)
                 self.list_segments.addItem(item)
         
-    def get_segment_list_label(self,action,segment_number):
+    def get_segment_list_label(self,action,segment_number,channel=0):
         """Returns a string summarising the parameters of the action.
         
 
@@ -1227,6 +1239,8 @@ class MainWindow(QMainWindow):
         segment_number : int
             Index of the segment that the label is being generated for. If
             `segment_number` is 0, start parameters are always displayed.
+        channel : int
+            The channel number of the segment. The default is 0.
 
         Returns
         -------
@@ -1238,7 +1252,7 @@ class MainWindow(QMainWindow):
         for key in action.freq_params.keys():
             if (self.button_prevent_freq_jumps.isChecked()) and (self.button_condense_segment_data.isChecked()) and (key in ['start_freq_MHz','end_freq_MHz']):
                 if self.freq_setting_segments != None:
-                    if segment_number not in self.freq_setting_segments:
+                    if segment_number not in self.freq_setting_segments[channel]:
                         pass
                     else:
                         label += key + '=' + str(action.freq_params[key])+', '
@@ -1339,6 +1353,7 @@ class MainWindow(QMainWindow):
             self.segment_list_update()
     
     def update_card_settings(self,card_settings):
+        channels_changed = False
         old_card_settings = self.card_settings
         new_card_settings = {**old_card_settings,**card_settings}
         for setting in card_settings.keys():
@@ -1347,11 +1362,17 @@ class MainWindow(QMainWindow):
             if new_value != old_value:
                 logging.warning('Changed card setting {} from {} to {}'.format(setting,old_value,new_value))
                 if setting == 'active_channels':
-                    self.segment_remove_all()
+                    channels_changed = True
         for setting in new_card_settings.keys():
             self.card_settings[setting] = new_card_settings[setting]
-        self._create_layout_autoplotter()
-        self.plot_autoplot_graphs()
+        if channels_changed:
+            self._create_layout_autoplotter()
+            self.segment_remove_all()
+        else:
+            for segment in self.segments:
+                for action in segment:
+                    action.calculate_time()
+            self.segment_list_update()
         self.w = None
 
     def prevent_freq_jumps(self):
@@ -1373,10 +1394,11 @@ class MainWindow(QMainWindow):
         set to the same frequency, there will be a frequency jump. A warning 
         will be issued in the console.
         
-        Rearrangement segments are completely unaffected, so a frequency jump 
-        could occur before/after a rearrangement segment. However, a phase jump
-        almost certainly will occur at the rearrangment segment, so the small 
-        amount of heating from a frequency jump is of little consequence.
+        For the rearrangement channel, rearrangement segments are completely 
+        unaffected, so a frequency jump could occur before/after a 
+        rearrangement segment. However, a phase jump almost certainly will 
+        occur at the rearrangment segment, so the small amount of heating from 
+        a frequency jump is of little consequence.
         
         After the frequencies have been made continuous, the looped segments 
         are readjusted just in case they have been overwritten (this shouldn't 
@@ -1388,15 +1410,17 @@ class MainWindow(QMainWindow):
         None.
 
         """
+        self.freq_adjust_looped_segments()
+        
         if not self.button_prevent_freq_jumps.isChecked():
             logging.debug('Disabling frequency jump prevention.')
             self.freq_setting_segments = None
             return
-                
-        self.freq_adjust_looped_segments()
         
         logging.debug('Preventing frequency jumps.')
+        self.freq_setting_segments = [] # record the segments that actually affect the frequency for autoplotting
         for channel in range(self.card_settings['active_channels']):
+            channel_freq_setting_segments = []
             steps_to_modify = list(range(len(self.steps)))
             freq_changing_steps = [step_i for step_i in steps_to_modify if self.segments[self.steps[step_i]['segment']][channel].is_freq_changing()]
             
@@ -1409,12 +1433,11 @@ class MainWindow(QMainWindow):
                     step_groups.append(steps_to_modify[freq_changing_i[i-1]:freq_changing_i[i]+1])
             
             # remove rearrangement steps so these are not modified
-            rearr_steps = [i for i, step in enumerate(self.steps) if step['rearr']]
-            step_groups = [[x for x in group if x not in rearr_steps] for group in step_groups]
+            if channel == self.rearr_settings['channel']:
+                rearr_steps = [i for i, step in enumerate(self.steps) if step['rearr']]
+                step_groups = [[x for x in group if x not in rearr_steps] for group in step_groups]
             
-            # prevent frequency jumps within each group
-            self.freq_setting_segments = [] # record the segments that actually affect the frequency for autoplotting
-            
+            # prevent frequency jumps within each group            
             for group in step_groups:
                 looping = [step_i for step_i in group if (self.steps[step_i]['after_step'] == 'loop_until_trigger')]
                 initial_action = self.segments[self.steps[group[0]]['segment']][channel]
@@ -1429,7 +1452,7 @@ class MainWindow(QMainWindow):
                                             'prevent a frequency jump.'.format(looping))
                     looping_action = self.segments[self.steps[looping[0]]['segment']][channel]
                     freqs_MHz = looping_action.freq_params['start_freq_MHz']
-                    self.freq_setting_segments.append(self.steps[looping[0]]['segment'])
+                    channel_freq_setting_segments.append(self.steps[looping[0]]['segment'])
                     
                     try:
                         initial_action.update_param('freq','end_freq_MHz',freqs_MHz)
@@ -1437,10 +1460,13 @@ class MainWindow(QMainWindow):
                         initial_action.update_param('freq','start_freq_MHz',freqs_MHz)
                 else:
                     freqs_MHz = initial_action.freq_params['start_freq_MHz']
-                    self.freq_setting_segments.append(self.steps[group[0]]['segment'])
+                    channel_freq_setting_segments.append(self.steps[group[0]]['segment'])
                     
-                for action in [self.segments[self.steps[step_i]['segment']][channel] for step_i in group][1:]:
+                for segment in [self.steps[step_i]['segment'] for step_i in group][1:]:
+                    action = self.segments[segment][channel]
+                    logging.debug('Updating segment {} start_freq_MHz to {}'.format(segment,freqs_MHz))
                     action.update_param('freq','start_freq_MHz',freqs_MHz)
+            self.freq_setting_segments.append(channel_freq_setting_segments)
                     
         self.freq_adjust_looped_segments()
 
@@ -1450,7 +1476,8 @@ class MainWindow(QMainWindow):
         `end_amp` list of the previous action (or the `start_amp`
         if that kwarg doesn't exist for the previous action).
         
-        Rearrangement segments are completely unaffected.
+        Rearrangement segments are completely unaffected for the rearrangement
+        channel.
 
         Returns
         -------
@@ -1459,8 +1486,8 @@ class MainWindow(QMainWindow):
         """
         if self.button_prevent_amp_jumps.isChecked():
             for i,segment in enumerate(self.segments):
-                if (i > 0) and (not ((self.rr != None) and (i in self.rr.segments))):
-                    for channel in range(self.card_settings['active_channels']):
+                for channel in range(self.card_settings['active_channels']):
+                    if (i > 0) and (not ((self.rr != None) and (self.rearr_settings['channel'] == channel) and (i in self.rr.segments))):
                         try:
                             prev_amps = self.segments[i-1][channel].amp_params['end_amp']
                         except:
@@ -1605,7 +1632,7 @@ class MainWindow(QMainWindow):
                             duration_xlabels[current_pos+0.5] = action.duration_ms
                         freq_segment_xlabels[current_pos+0.5] = '{}\n{}'.format(segment,action.freq_function_name)
                         amp_segment_xlabels[current_pos+0.5] = '{}\n{}'.format(segment,action.amp_function_name)
-                        if (self.freq_setting_segments != None) and (segment not in self.freq_setting_segments):
+                        if (self.freq_setting_segments != None) and (segment not in self.freq_setting_segments[channel]):
                             style = Qt.DashLine
                         else:
                             style = None 
@@ -1641,12 +1668,15 @@ class MainWindow(QMainWindow):
             self.export_segments_to_csv(export_directory)
             
     def export_segments_to_csv(self,export_directory):
+        logging.debug('Saving all segments to csv.')
         self.calculate_all_segments()
         for seg_num,segment in enumerate(self.segments):
             for channel in range(self.card_settings['active_channels']):
                 data = segment[channel].data
+                logging.debug('Saving segment {}, channel {} to csv.'.format(seg_num,channel))
                 filename = export_directory+"/seg{}ch{}.csv".format(seg_num,channel)
                 np.savetxt(filename, data, delimiter=",")
+        logging.debug('Saving all segments to csv complete.')
                 
     def calculate_send(self):
         """Sends the data to the AWG card."""

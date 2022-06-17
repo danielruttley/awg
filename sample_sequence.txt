@@ -3,7 +3,7 @@
         "active_channels": 1,
         "sample_rate_Hz": 625000000,
         "max_output_mV": 200,
-        "number_of_segments": 8,
+        "number_of_segments": 64,
         "segment_min_samples": 192,
         "segment_step_samples": 32
     },

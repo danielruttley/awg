@@ -188,7 +188,7 @@ class ActionContainer():
             if param in inspect.getfullargspec(self.freq_function)[0]:
                 if value != self.freq_params[param]:
                     self.freq_params[param] = value
-                    self.equalise_param_lengths()
+                    self.equalise_param_lengths(len(value))
                     self.needs_to_calculate = True
             else:
                 raise NameError('{} is not a parameter for freq_{} function'.format(param,self.freq_function_name))
@@ -196,7 +196,7 @@ class ActionContainer():
             if param in inspect.getfullargspec(self.amp_function)[0]:
                 if value != self.amp_params[param]:
                     self.amp_params[param] = value
-                    self.equalise_param_lengths()
+                    self.equalise_param_lengths(len(value))
                     self.needs_to_calculate = True
             else:
                 raise NameError('{} is not a parameter for amp_{} function'.format(param,self.amp_function_name))
@@ -281,7 +281,7 @@ class ActionContainer():
         
         self.update_param(target_function,param,new_values)
     
-    def equalise_param_lengths(self):
+    def equalise_param_lengths(self, num_tones=None):
         """Removes redundant data for when some kwargs are specified to be for
         more tones than others.
         
@@ -289,25 +289,35 @@ class ActionContainer():
         list. Any lists that are longer length that than the shortest list are
         truncated and redundant data is deleted.
         
+        Parameters
+        ----------
+        num_tones : int or None
+            The length that the parameters should be equalised to. If a 
+            parameter has an existing length shorter than this, then the 
+            first value is repeated to fill the gaps. If longer, only the 
+            number of parameters up to this value are kept. If None, the 
+            number of parameters decided by the longest list and other lists 
+            are padded with the parameter in their first entry. The default is 
+            None.
 
         Returns
         -------
         None.
 
         """
-        min_length = max_tone_num
-        for key in self.freq_params.keys():
-            min_length = np.min([min_length,len(self.freq_params[key])])
-        for key in self.amp_params.keys():
-            min_length = np.min([min_length,len(self.amp_params[key])])
+        if num_tones == None:
+            num_tones = max([max([len(i) for i in self.freq_params.values()]),max([len(i) for i in self.amp_params.values()])])
         
-        for key in self.freq_params.keys():
-            self.freq_params[key] = self.freq_params[key][:min_length]
-        for key in self.amp_params.keys():
-            self.amp_params[key] = self.amp_params[key][:min_length]
+        for param_dict in [self.freq_params,self.amp_params]:
+            for key,value in param_dict.items():
+                if len(value) < num_tones:
+                    logging.debug('Extending {} length'.format(key))
+                    param_dict[key] = value + [value[0]]*(num_tones-len(value))
+                elif len(value) > num_tones:
+                    param_dict[key] = value[:num_tones]
 
     def calculate_time(self):
-        """Generates a `numpy` array containing the time steps (in ms) for the 
+        """Generates a `numpy` array containing the time steps (in s) for the 
         action. This array starts from zero and runs to the `duration_ms` 
         attribute.
         
@@ -337,6 +347,7 @@ class ActionContainer():
         self.duration_ms = num_samples*time_step*1e3
         self.time = np.linspace(0,self.duration_ms*1e-3,num_samples+1)
         self.data = np.empty_like(self.time)
+        self.needs_to_calculate = True
 
     def calculate(self):
         """
@@ -609,6 +620,8 @@ class ActionContainer():
     All functions should have the kwarg `_time` with default value None. This 
     will not show up in the GUI but allows smaller subsets of the action to be
     calculated rather than the entire action (e.g. when autoplotting).
+    
+    _time should be provided in units of seconds.
 
     Global params (e.g. duration, sample rate, etc. should be passed as
     class attributes rather than function arguements.)
@@ -628,23 +641,41 @@ class ActionContainer():
         elif hybridicity == 0:
             return self.freq_min_jerk(start_freq_MHz,end_freq_MHz,start_phase,_time)
         else:
-            return self.freq_min_jerk(start_freq_MHz,end_freq_MHz,start_phase,_time)
-            #TODO finish this
             d = (end_freq_MHz-start_freq_MHz)
             T = _time[-1] - _time[0]
             deltat = T*(1-hybridicity)/2
             deltaf = d/(2+15/4*hybridicity/(1-hybridicity))
-            time1 = _time[0:round((1-hybridicity)/2)]
-            time2 = _time[round((1-hybridicity)/2)]
             
-            # freq1 = list(freq_min_jerk(start_freq_MHz,start_freq_MHz+2*deltaf,))
+            time_cutoff = round((1-hybridicity)/2*len(_time))
             
-    def freq_min_jerk(self,start_freq_MHz=100,end_freq_MHz=101,start_phase=0,_time=None):
+            time1 = _time[:time_cutoff]
+            time2 = _time[time_cutoff:len(_time)-time_cutoff]
+            time3 = _time[len(_time)-time_cutoff:]
+            
+            try:
+                freq1 = list(self.freq_min_jerk(start_freq_MHz,start_freq_MHz+2*deltaf,0,time1,2*deltat))
+            except IndexError:
+                freq1 = []
+                
+            try:
+                freq2 = list(15/4*deltaf/2/deltat*(time2-time2[0])+(start_freq_MHz+deltaf))
+            except IndexError:
+                freq2 = []
+            
+            try:
+                freq3 = list(self.freq_min_jerk(end_freq_MHz-2*deltaf,end_freq_MHz,0,time3-_time[-1]+2*deltat,2*deltat))
+            except IndexError:
+                freq3 = []
+            
+            return np.asarray(freq1+freq2+freq3)
+            
+    def freq_min_jerk(self,start_freq_MHz=100,end_freq_MHz=101,start_phase=0,_time=None,_T=None):
         if _time is None:
             _time = self.time
         d = (end_freq_MHz-start_freq_MHz)
-        T = _time[-1] - _time[0]
-        return d*(10*(_time/T)**3 - 15*(_time/T)**4 + 6*(_time/T)**5) + start_freq_MHz
+        if _T == None:
+            _T = _time[-1] - _time[0]
+        return d*(10*(_time/_T)**3 - 15*(_time/_T)**4 + 6*(_time/_T)**5) + start_freq_MHz
     
     def amp_static(self,start_amp=1,_time=None):
         if _time is None:
@@ -656,7 +687,7 @@ class ActionContainer():
             _time = self.time
         return np.linspace(start_amp,end_amp,len(_time))
     
-    def amp_drop(self,drop_time_us=100,start_amp=1,drop_amp=0,_time=None):
+    def amp_drop(self,start_amp=1,drop_amp=0,drop_time_us=100,_time=None):
         if _time is None:
             _time = self.time
         amp = np.ones_like(_time)*start_amp
@@ -664,6 +695,28 @@ class ActionContainer():
         drop_idx = np.where(np.abs(_time-duration/2)<((drop_time_us*1e-6)/2))
         amp[drop_idx] = drop_amp
         return amp
+    
+    def amp_approx_exp(self,start_amp=1,end_amp=0,index=20,_time=None):
+        """Approximate exponential ramp that starts and ends at the specified
+        value.
+        
+        """
+        if index <= 1:
+            logging.warning('amp_approx_exp index {} was invalid. Using '
+                            'linear ramp instead.'.format(index))
+            return self.amp_ramp(start_amp,end_amp,_time)
+        if _time is None:
+            _time = self.time
+        return np.flip((index**(_time/_time[-1])-1)/(index-1)*(start_amp-end_amp) + end_amp)
+    
+    def amp_modulate(self,start_amp=0.8,mod_amp=0.2,mod_freq_kHz=10,_time=None):
+        """Modulate the amplitude for parametric heating measurements.
+        Note it could be possible that a non-integer number of modulations 
+        are performed - this might cause a bit of a phase jump like effect, 
+        but this shouldn't matter for a parametric heating measurement.
+        
+        """
+        return mod_amp*np.sin(2*np.pi*mod_freq_kHz*1e3*_time)+start_amp
     
 if __name__ == '__main__':
     card_settings = {'active_channels':1,
@@ -674,6 +727,7 @@ if __name__ == '__main__':
                      'segment_step_samples':32
                      }
     action_params = {'duration_ms' : 1,
+                     'phase_behaviour' : 'manual',
                      'freq' : {'function' : 'static',
                                'start_freq_MHz': [100],
                                'start_phase' : [0]},
