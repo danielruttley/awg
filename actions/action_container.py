@@ -153,7 +153,7 @@ class ActionContainer():
         
         return deepcopy(action_params)
 
-    def update_param(self,target_function,param,value):
+    def update_param(self,target_function=None,param=None,value=None):
         """Updates the relvant function dictionary with a new parameter value.
         
         Recalculation of the action data is NOT performed to allow for fast 
@@ -161,17 +161,19 @@ class ActionContainer():
         GUI. However the boolean attribute `needs_to_calculate` is set to
         True which will ensure recalculation is performed when the 
         `calculate` method is called.
-        
 
         Parameters
         ----------
-        target_function : {'freq', 'amp'}
+        target_function : {'freq', 'amp', None}
             The target function to update the parameter of (either the 
-            frequency or amplitude function).
+            frequency or amplitude function). If not 'freq' or 'amp', the freq 
+            and amp param dictonaries will be searched for the parameter and 
+            the correct one will be modified, with preference given to the 
+            freq dict. The default is None.
         param : str
             The function kwarg to change.
-        value : float
-            The value to change the arguement to.
+        value : list of (typically) float
+            The list of values to change the arguement to.
 
         Raises
         ------
@@ -184,6 +186,31 @@ class ActionContainer():
         None.
 
         """
+        if param == 'duration_ms':
+            self.duration_ms = value[0]
+            self.calculate_time()
+            self.needs_to_calculate = True
+            return
+        elif param == 'phase_behaviour':
+            if value[0] in ['optimise','continue','manual']:
+                self.phase_behaviour = value[0]
+                self.needs_to_calculate = True
+            else:
+                logging.error('{} is not a valid value for {}. '
+                              'Ignoring.'.format(value[0],param))
+            return  
+        
+        if target_function not in ['freq','amp']:
+            if param in inspect.getfullargspec(self.freq_function)[0]:
+                target_function = 'freq'
+            elif param in inspect.getfullargspec(self.amp_function)[0]:
+                target_function = 'amp'
+            else:
+                logging.error('Parameter {} is not valid for either the '
+                              'frequency or amplitude of this action. Nothing '
+                              'will be changed.'.format(param))
+                return
+        
         if target_function == 'freq':
             if param in inspect.getfullargspec(self.freq_function)[0]:
                 if value != self.freq_params[param]:
@@ -199,7 +226,7 @@ class ActionContainer():
                     self.equalise_param_lengths(len(value))
                     self.needs_to_calculate = True
             else:
-                raise NameError('{} is not a parameter for amp_{} function'.format(param,self.amp_function_name))
+                raise NameError('{} is not a parameter for amp_{} function'.format(param,self.amp_function_name))  
     
     def update_param_single_tone(self,param,value,tone_index,target_function=None):
         """Updates the relvant function dictionary with a new parameter value
@@ -280,6 +307,32 @@ class ActionContainer():
                     return
         
         self.update_param(target_function,param,new_values)
+         
+    def update_complete_param(self,param,values,target_function=None):
+        """Updates the relvant function dictionary with a new parameter value
+        for a single tone. This is the method that is called when PyDex sends 
+        a TCP message to the `MainWindow` to update a parameter.
+        
+        Parameters
+        ----------
+        param : str
+            The function kwarg to change.
+        value : float
+            The value to change the arguement to.
+        tone_index : int
+            The index of the tone to change. This should be a non-negative 
+            integer if only one tone should be changed. If a negative integer 
+            is supplied, all tones will be changed to the given value.
+        target_function : {'freq','amp',None}
+            The target function to update the parameter of (either the 
+            frequency or amplitude function). If not 'freq' or 'amp', the freq 
+            and amp param dictonaries will be searched for the parameter and 
+            the correct one will be modified, with preference given to the 
+            freq dict. The default is None.
+        """
+
+        
+        self.update_param(target_function,param,values)
     
     def equalise_param_lengths(self, num_tones=None):
         """Removes redundant data for when some kwargs are specified to be for
@@ -364,9 +417,6 @@ class ActionContainer():
 
         """
         
-        # TODO: Currently all amplitude data is scaled by 1e-9 just to be safe
-        #       but this should evenutally be removed.
-        
         if self.needs_to_calculate:
             self.data = np.zeros_like(self.time)
             self.end_phase = []
@@ -382,6 +432,7 @@ class ActionContainer():
                 
                 self.end_phase.append(phase_data[-1]%360)
             self.data = self.data[1:]
+            print(max(self.data))
             self.needs_to_calculate = False
             self.needs_to_transfer = True
     
@@ -402,7 +453,10 @@ class ActionContainer():
 
         """       
         if self.phase_behaviour == 'optimise':
-            self.freq_params['start_phase'] = phase_minimise(self.freq_params['start_freq_MHz'],self.amp_params['start_amp'])
+            start_amp_mV = self.amp_adjuster.adjuster(self.freq_params['start_freq_MHz'],self.amp_params['start_amp'])
+            print(start_amp_mV)
+            self.freq_params['start_phase'] = phase_minimise(self.freq_params['start_freq_MHz'],
+                                                             start_amp_mV)
             self.needs_to_calculate = True
             self.needs_to_transfer = True
         elif self.phase_behaviour == 'continue':
@@ -494,15 +548,17 @@ class ActionContainer():
             returned in degrees.
 
         """
-        phases = []
-        phase = initial_phase
-
-        for i,cur_freq in enumerate(freq_data):
-            phases.append(phase)
-            if i < len(self.time)-1:
-                phase += 360*cur_freq*1e6*(self.time[i+1]-self.time[i])
-
-        phases = np.asarray(phases)
+        # phases = []
+        # phase = initial_phase
+        # for i,cur_freq in enumerate(freq_data):
+        #     phases.append(phase)
+        #     if i < len(self.time)-1:
+        #         phase += 360*cur_freq*1e6*(self.time[i+1]-self.time[i])
+        # phases = np.asarray(phases)
+        
+        phases = np.cumsum(360*freq_data*1e6*(self.time[1]-self.time[0]))
+        phases += (initial_phase-phases[0])
+        
         return phases
     
     def get_autoplot_traces(self,num_points=50,show_amp_in_mV=True):

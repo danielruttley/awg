@@ -4,6 +4,8 @@ logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=loggin
 import numpy as np
 import ctypes
 
+from copy import copy
+
 from .pyspcm import *
 from .spcm_tools import *
 
@@ -105,7 +107,9 @@ class AWG():
         self.hCard = spcm_hOpen(create_string_buffer(b'/dev/spcm0'))
         if self.hCard == None:
             logging.error("No AWG card found")
-            
+        
+        #spcm_dwSetParam_i32(self.hCard, SPC_M2CMD, M2CMD_CARD_RESET)
+        
         #Initialisation of reading parameters and definition of memory type.
         lCardType     = int32(0) 
         lSerialNumber = int32(0)
@@ -174,8 +178,8 @@ class AWG():
         logging.debug('number of active channels = {}'.format(self.lNumChannels.value))
         for lChannel in range (0, self.lNumChannels.value, 1):
             logging.debug('Setting up channel {}'.format(lChannel))
-            spcm_dwSetParam_i32 (self.hCard, SPC_ENABLEOUT0    + lChannel * (SPC_ENABLEOUT1    - SPC_ENABLEOUT0),    1)
-            spcm_dwSetParam_i32 (self.hCard, SPC_AMP0          + lChannel * (SPC_AMP1          - SPC_AMP0),          self.max_output_mV)
+            spcm_dwSetParam_i32(self.hCard, SPC_ENABLEOUT0 + lChannel * (SPC_ENABLEOUT1 - SPC_ENABLEOUT0), 1)
+            spcm_dwSetParam_i32(self.hCard, SPC_AMP0       + lChannel * (SPC_AMP1       - SPC_AMP0      ),  int32(self.max_output_mV))
             
             lmax_output_mV = int32(0)
             spcm_dwGetParam_i32(self.hCard, SPC_AMP0+lChannel*(SPC_AMP1 - SPC_AMP0), byref(lmax_output_mV))
@@ -189,13 +193,14 @@ class AWG():
         spcm_dwSetParam_i32(self.hCard, SPC_CLOCKMODE, SPC_CM_INTPLL)
         spcm_dwSetParam_i64(self.hCard, SPC_SAMPLERATE, int32(self.sample_rate_Hz))
         regSrate = int64(0)                                        # Although we request a certain value, it does not mean that this is what the machine is capable of. 
-        spcm_dwGetParam_i64 (self.hCard, SPC_SAMPLERATE, byref(regSrate))    # We instead store the one the machine will use in the end.  
+        spcm_dwGetParam_i64(self.hCard, SPC_SAMPLERATE, byref(regSrate))    # We instead store the one the machine will use in the end.  
         self.sample_rate_Hz = regSrate.value
         logging.debug('sample rate set to {} S/s'.format(self.sample_rate_Hz))
 
         # Generate the data and transfer it to the card
-        lMaxADCValue = int32 (0) # decimal code of the full scale value
-        spcm_dwGetParam_i32 (self.hCard, SPC_MIINST_MAXADCVALUE, byref (lMaxADCValue))
+        lMaxADCValue = int32(0) # decimal code of the full scale value
+        spcm_dwGetParam_i32(self.hCard, SPC_MIINST_MAXADCVALUE, byref(lMaxADCValue))
+        logging.debug('decimal code of full scale value {}'.format(lMaxADCValue.value))
 
         # Checks the number of bytes used per sample
         self.lBytesPerSample = int32(0)
@@ -203,7 +208,7 @@ class AWG():
         logging.debug('bytes per sample {}'.format(self.lBytesPerSample.value))
                 
         # Set the start step to zero
-        spcm_dwSetParam_i32 (self.hCard, SPC_SEQMODE_STARTSTEP, 0)
+        spcm_dwSetParam_i32(self.hCard, SPC_SEQMODE_STARTSTEP, 0)
         
     def start(self,timeout = 10000):
         """Starts the AWG card. Unlike in the previous AWG code, errors in 
@@ -214,6 +219,8 @@ class AWG():
         
         The check for the start_step == 0 that was previously in the main 
         script when the start_awg command was recieved has been moved to here.
+        
+        The AWG will trigger once when started to set the step to 0.
         
         Parameters
         ----------
@@ -226,7 +233,7 @@ class AWG():
         None.
         
         """
-        
+        self.stop()
         status = int32(0)
         spcm_dwGetParam_i32(self.hCard, SPC_M2STATUS, byref(status))
         
@@ -248,6 +255,9 @@ class AWG():
             
         else:
             logging.error("AWG was asked to start but AWG is already running.")
+        
+        spcm_dwSetParam_i32 (self.hCard, SPC_SEQMODE_STARTSTEP, 0)
+        self.trigger()
         
     def stop(self):
         """Stops the AWG. The connection to the card is not closed, so the 
@@ -324,10 +334,12 @@ class AWG():
         None.
 
         """
+        self.stop()
+        
         for segment_index,segment in enumerate(segments):
             segment_data = []
-            for action in segment:
-                action.calculate()
+            # for action in segment: # removed because this function should only be called once all segments are calculated
+            #     action.calculate()
             if any([action.needs_to_transfer for action in segment]):
                 for action in segment:
                     segment_data.append(action.data)
@@ -379,6 +391,7 @@ class AWG():
             The multiplexed arrays.
             
         """
+        logging.debug('Multiplexing data.')
         l = len(arrays)
         c = np.empty((len(arrays[0]) * l,), dtype=arrays[0].dtype)
         for x in range(l):
@@ -406,13 +419,15 @@ class AWG():
         
         """     
         segment_data /= self.max_output_mV
+        print(max(segment_data))
         
         if any(segment_data > 1) or any(segment_data < -1):
             logging.warning('Some of the data in segment {} was '
                             'larger than the maximum amplitude of '
                             '+/-{} mV. This data has been clipped to '
                             'stay within the bounds.'.format(segment_index,self.max_output_mV))
-            segment_data = segment_data.clip(max=1, min=-1)
+            # segment_data = segment_data.clip(max=1, min=-1)
+            segment_data /= max(segment_data)
         segment_data = np.int16(segment_data*2**15)
         
         dwSegmentLenSample = len(segment_data)
@@ -424,7 +439,7 @@ class AWG():
         # Set the segment number to edit and the segment size
         dwError = spcm_dwSetParam_i32(self.hCard, SPC_SEQMODE_WRITESEGMENT, segment_index)
         if dwError == ERR_OK:
-            dwError = spcm_dwSetParam_i32 (self.hCard, SPC_SEQMODE_SEGMENTSIZE,  dwSegmentLenSample)
+            dwError = spcm_dwSetParam_i32 (self.hCard, SPC_SEQMODE_SEGMENTSIZE,  int(dwSegmentLenSample/self.lNumChannels.value))
         else:
             logging.error('Failed to set active segment to segment {}.'.format(segment_index))
             
@@ -458,6 +473,8 @@ class AWG():
         # This only changes the way that the program reads that memory spot.
         pnBuffer = cast(pvBuffer, ptr16)
         
+        # print(segment_data)
+
         lib = ctypes.cdll.LoadLibrary(r"Z:\Tweezer\Code\Python 3.9\awg\awg\memCopier\bin\Debug\memCopier.dll")
         lib.memCopier(pvBuffer,np.ctypeslib.as_ctypes(segment_data),int(dwSegmentLenSample))
         
@@ -543,6 +560,8 @@ class AWG():
                           "'continue', but is currently '{}'. Cancelling step "
                           "creation".format(step_index,after_step))
             return
+            
+        logging.debug('Setting step {} to segment {}.'.format(step_index,segment))
         
         llvals=int64((llCondition<<32) | (number_of_loops<<32) | (next_step_index<<16) | segment)
         spcm_dwSetParam_i64(self.hCard,SPC_SEQMODE_STEPMEM0 + step_index,llvals)

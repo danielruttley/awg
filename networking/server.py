@@ -144,7 +144,10 @@ class PyServer(QThread):
                 reset_slot(self.finished, self.reset_stop)
                 self.stop = True # stop the thread running
             while True:
-                self.app.processEvents() # hopefully helps prevent GUI lag
+                try:
+                    self.app.processEvents() # hopefully helps prevent GUI lag
+                except AttributeError:
+                    pass
                 if self.check_stop():
                     break # toggle
                 elif len(self.__mq):

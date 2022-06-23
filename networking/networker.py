@@ -77,9 +77,15 @@ class Networker():
         *rearrange* = rearrange_occupancy (e.g. 001001)
             Triggers the segment of the rearrangement step to be updated based 
             on the rearrange_occupancy (binary string)
-        *set_data* = [channel (int), segment (int), param (str), value (float),
-                      tone_index (int)]
-            Updates the parameter of a given action with the supplied value. 
+        *set_data* = [[channel (int), segment (int), param (str), value (float),
+                      tone_index (int)],...]
+            Updates the parameter of a given action with the supplied value. A
+            list of lists is recieved from PyDex to allow more than one 
+            setting to be changed without having to send multiple TCP messages.
+        *set_complete_data* = [channel (int), segment(int), param (str), 
+                               values (list)]
+            Sets the complete value list of an action. The length of the other
+            settings in the action are set to the length of this list.
         
         Other commands are ignored.
         
@@ -107,7 +113,15 @@ class Networker():
         elif 'set_data' in command:
             try:
                 arg = eval(arg)
-                self.main_window.data_recieve(*arg)
+                self.main_window.data_recieve(arg)
+            except NameError:
+                logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
+            except SyntaxError:
+                logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
+        elif 'set_complete_data' in command:
+            try:
+                arg = eval(arg)
+                self.main_window.complete_data_recieve(arg)
             except NameError:
                 logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
             except SyntaxError:

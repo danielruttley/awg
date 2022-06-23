@@ -191,14 +191,14 @@ class RearrangementHandler():
             string = string + '0'*(len(self.start_freq_MHz)-len(string))
         
         if occupied_traps < len(self.target_freq_MHz):
-            logging.info('Not enough initial traps loaded for successful '
-                         'rearrangement. Filling as many traps as possible.')
+            logging.debug('Not enough initial traps loaded for successful '
+                          'rearrangement. Filling as many traps as possible.')
             for i in range(len(string)):
                 string = string[:-(i+1)] + '1'*(i+1)
                 if sum([int(x) for x in string]) == len(self.target_freq_MHz):
                     break
         elif occupied_traps > len(self.target_freq_MHz):
-            logging.info('Rearrangement traps overfilled. Dicarding some.')
+            logging.debug('Rearrangement traps overfilled. Dicarding some.')
             occupied_subtotal = 0
             for i in range(len(string)):
                 occupied_subtotal += int(string[i])
@@ -208,7 +208,7 @@ class RearrangementHandler():
 
         segment = self.segments[self.occupations.index(string)]
 
-        logging.info('Processed recieved string {} as {} to get '
+        logging.debug('Processed recieved string {} as {} to get '
                      'rearrangement segment {}'.format(
                      recieved_string, string, segment))
         

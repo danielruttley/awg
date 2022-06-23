@@ -6,11 +6,11 @@ from qtpy.QtWidgets import QApplication
 from gui import MainWindow
 
 network_settings = {"client_ip": "129.234.190.164",
-                    "client_port": 8623,
+                    "client_port": 8628,
                     "server_ip": "",
-                    "server_port": 8626}
+                    "server_port": 8629}
 
 app = QApplication(sys.argv)
-boss = MainWindow('AWG1','default_params_AWG1.txt',network_settings)
+boss = MainWindow('AWG2','default_params_AWG2.txt',network_settings)
 boss.show()
 app.exec()

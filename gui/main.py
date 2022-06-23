@@ -45,8 +45,7 @@ color_needs_to_calculate = '#dfbbf0'
 color_loop_background = '#659ffc'
 color_phase_jump = '#ff000020'
 
-dicts_to_save = ['card_settings','network_settings','amp_adjuster_settings',
-                 'rearr_settings']
+dicts_to_save = ['card_settings','amp_adjuster_settings','rearr_settings']
 datagen_settings_to_save = ['button_couple_steps_segments','button_prevent_freq_jumps',
                             'button_prevent_amp_jumps','button_freq_adjust_looped_segments',
                             'button_prevent_phase_jumps']
@@ -91,7 +90,11 @@ class MainWindow(QMainWindow):
         the other relies on.
         
     """
-    def __init__(self,name='AWG1',params_filename='default_params.txt'):
+    def __init__(self,name='AWG1',params_filename='default_params.txt',
+                      network_settings={'client_ip': 'localhost',
+                                        "client_port": 5063,
+                                        "server_ip": "",
+                                        "server_port": 5064}):
         super().__init__()
 
         self.name = name        
@@ -122,7 +125,7 @@ class MainWindow(QMainWindow):
         self.steps = []
         
         self.load_params(params_filename)
-        self.networker = Networker(main_window=self,**self.network_settings)
+        self.networker = Networker(main_window=self,**network_settings)
 
     def _create_menu_bar(self):
         action_load_params = QAction(self)
@@ -180,7 +183,7 @@ class MainWindow(QMainWindow):
         self.button_trigger.clicked.connect(self.awg_trigger)
         layout_step_control.addWidget(self.button_trigger)
     
-        self.button_check_current_step = QPushButton("Check current step: ?")
+        self.button_check_current_step = QPushButton("Check current step: ? (segment: ?)")
         self.button_check_current_step.clicked.connect(self.awg_update_current_step)
         layout_step_control.addWidget(self.button_check_current_step)
 
@@ -422,18 +425,13 @@ class MainWindow(QMainWindow):
                 if data[name] != getattr(self,name):
                     logging.debug('Updating attribute {}.'.format(name))
                     setattr(self,name,data[name])
-                    if name == 'card_settings':
-                        try:
-                            self.awg.close()
-                        except Exception:
-                            logging.debug("Tried to close AWG object but failed. This might be okay if one wasn't expected to exist.")
-                        self.awg = AWG(**self.card_settings)
             except AttributeError:
                 setattr(self,name,data[name])
                     
+        self.update_card_settings()
         self.set_datagen_settings(data['datagen_settings'])
         self._create_layout_autoplotter()
-        self.set_amp_adjuster_settings(False)
+        self.set_amp_adjuster_settings(update_segment_list=False)
         
         self.segment_add_all(data['segments'])
         self.steps = data['steps']
@@ -462,7 +460,7 @@ class MainWindow(QMainWindow):
         logging.debug("Finished loading AWG params from '{}'.".format(filename))
     
         #TODO: uncomment the below line to send to the AWG when loading.
-        # self.calculate_send()
+        self.calculate_send()
         
     def load_params_dialogue(self):
         filename = QFileDialog.getOpenFileName(self, 'Load AWGparam','.',"Text documents (*.txt)")[0]
@@ -580,13 +578,14 @@ class MainWindow(QMainWindow):
         logging.debug('Calculating all segments.')
         for segment_index, segment in enumerate(self.segments):
             for action_index, action in enumerate(segment):
-                logging.debug('Calculating segment {}, channel {}.'.format(segment_index,action_index))
-                if segment_index == 0:
-                    action.set_start_phase(None)
-                else:
-                    end_phase = self.segments[segment_index-1][action_index].end_phase
-                    action.set_start_phase(end_phase)
-                action.calculate()
+                if action.needs_to_calculate:
+                    logging.debug('Calculating segment {}, channel {}.'.format(segment_index,action_index))
+                    if segment_index == 0:
+                        action.set_start_phase(None)
+                    else:
+                        end_phase = self.segments[segment_index-1][action_index].end_phase
+                        action.set_start_phase(end_phase)
+                    action.calculate()
         self.segment_list_update()
 
     def update_label_awg(self):
@@ -766,7 +765,8 @@ class MainWindow(QMainWindow):
         If a rearrangement segment is edited, then all the rearrangement 
         segments will be edited. This means that a parameter for all the 
         rearrangement segments can be edited by sending the parameter to just 
-        one of the segments.
+        one of the segments. This is done by deactivating rearrangement, 
+        editing just the base segment, and then reactivating rearrangement.
 
         Parameters
         ----------
@@ -813,19 +813,28 @@ class MainWindow(QMainWindow):
                 self.rr.segments = [i+1 for i in self.rr.segments]
             if self.button_couple_steps_segments.isChecked():
                 step_index = self.get_step_from_segment(selected_row)
-                self.steps.insert(step_index,{'segment': selected_row+1, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
                 try:
-                    for step in self.steps[step_index+1:]:
-                        step['segment'] = step['segment'] + 1
-                except IndexError:
-                    pass
+                    self.steps.insert(step_index,{'segment': selected_row+1, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
+                    try:
+                        for step in self.steps[step_index+1:]:
+                            step['segment'] = step['segment'] + 1
+                    except IndexError:
+                        pass
+                except TypeError:
+                    logging.debug('Could not insert step because steps list does not exist.')
         else:
             if (self.rr != None) and (editing_segment in self.rr.segments):
-                base_rr_segment = self.rr.segments[0]
-                self.button_rearr.setChecked(False)
-                self.segments[base_rr_segment] = segment
-                self.list_segments.setCurrentRow(base_rr_segment)
+                rr_start_index = self.rr.segments[0]
+                for i in self.rr.segments[:0:-1]:
+                    self.segments.pop(i)
+                for action in self.segments[rr_start_index]:
+                    action.rearr = False
+                self.rr = None
+                self.button_rearr.blockSignals(True)
                 self.button_rearr.setChecked(True)
+                self.button_rearr.blockSignals(False)
+                self.segments[rr_start_index] = segment
+                self.rearr_toggle(start_index = rr_start_index)
             else:
                 self.segments[editing_segment] = segment
         self.segment_list_update()
@@ -1018,14 +1027,17 @@ class MainWindow(QMainWindow):
                 
             self.awg._set_step(step_index,**step_params,next_step_index=next_step_index)
             
-    def data_recieve(self,channel, segment, param, value, tone_index):
+    def data_recieve(self,data_list):
         """Accepts data recieved from PyDex over TCP from the Networker to 
         update the data of a single tone in a given action.
         
-        The data is
-        
         Parameters
         ----------
+        data : list of list
+            The data to update segments with. Each entry in this list is 
+            itself a list that contains the following parameters (in order):
+                
+                
         channel : int
             The channel to change the data of.
         segment : int
@@ -1044,44 +1056,111 @@ class MainWindow(QMainWindow):
         None.
         
         """
-        channel = int(channel)
-        segment = int(segment)
-        try:
-            tone_index = int(tone_index)
-        except ValueError:
-            logging.debug('tone_index {} not valid integer. Setting to '
-                          '-1 (will affect all tones).'.format(tone_index))
-            tone_index = -1
         
-        logging.info("Changing channel {}, segment {}, parameter '{}', tone {}"
-                     " to {}.".format(channel,segment,param,tone_index,value))
+        for data in data_list:
+            [channel, segment, param, value, tone_index] = data
         
-        if (self.rr != None) and (segment in self.rr.segments):
-            segments = self.rr.segments
-            logging.info('Segment {} is a rearrangement segment, so all '
-                         'rearrangement segments will be changed.'.format(segment))
-        else:
-            segments = [segment]
-        
-        for segment in segments:
-            if param in shared_segment_params:
-                logging.debug('Param {} is shared across all actions in the '
-                              'segment, so all actions will be updated.'.format(param))
-                actions = self.segments[segment]
-            else:
-                try:
-                    actions = [self.segments[segment][channel]]
-                except IndexError:
-                    logging.error('Channel {} is not active. Ignoring.'.format(channel))
-                    return
+            channel = int(channel)
+            segment = int(segment)
+            try:
+                tone_index = int(tone_index)
+            except ValueError:
+                logging.debug('tone_index {} not valid integer. Setting to '
+                              '-1 (will affect all tones).'.format(tone_index))
+                tone_index = -1
             
-            for action in actions:
-                action.update_param_single_tone(param, value, tone_index)
+            logging.info("Changing channel {}, segment {}, parameter '{}', tone {}"
+                         " to {}.".format(channel,segment,param,tone_index,value))
+            
+            if (self.rr != None) and (segment in self.rr.segments):
+                segments = self.rr.segments
+                logging.info('Segment {} is a rearrangement segment, so all '
+                             'rearrangement segments will be changed.'.format(segment))
+            else:
+                segments = [segment]
+            
+            for segment in segments:
+                if param in shared_segment_params:
+                    logging.debug('Param {} is shared across all actions in the '
+                                  'segment, so all actions will be updated.'.format(param))
+                    actions = self.segments[segment]
+                else:
+                    try:
+                        actions = [self.segments[segment][channel]]
+                    except IndexError:
+                        logging.error('Channel {} is not active. Ignoring.'.format(channel))
+                        continue
+                
+                for action in actions:
+                    action.update_param_single_tone(param, value, tone_index)
         
         self.segment_list_update()
         
         #TODO: uncomment the below line to send to the AWG when recieving.
-        # self.calculate_send()
+        self.calculate_send()
+        
+    def complete_data_recieve(self,data_list):
+        """Accepts a complete values list for a parameter of an action.
+        The length of the other settings in the action are set to the length 
+        of this list.
+        
+        Parameters
+        ----------
+        data : list of list
+            The data to update segments with. Each entry in this list is 
+            itself a list that contains the following parameters (in order):
+                
+                
+        channel : int
+            The channel to change the data of.
+        segment : int
+            The segment to change the data of.
+        param : str
+            The function kwarg to change.
+        values : float
+            The values list to change the arguement to.
+            
+        Returns
+        -------
+        None.
+        
+        """
+        
+        for data in data_list:
+            [channel, segment, param, values] = data
+        
+            channel = int(channel)
+            segment = int(segment)
+            
+            logging.info("Changing channel {}, segment {}, parameter '{}'"
+                         " to {}.".format(channel,segment,param,values))
+            
+            if (self.rr != None) and (segment in self.rr.segments):
+                segments = self.rr.segments
+                logging.info('Segment {} is a rearrangement segment, so all '
+                             'rearrangement segments will be changed.'.format(segment))
+            else:
+                segments = [segment]
+            
+            for segment in segments:
+                if param in shared_segment_params:
+                    logging.debug('Param {} is shared across all actions in the '
+                                  'segment, so all actions will be updated.'.format(param))
+                    actions = self.segments[segment]
+                else:
+                    try:
+                        actions = [self.segments[segment][channel]]
+                    except IndexError:
+                        logging.error('Channel {} is not active. Ignoring.'.format(channel))
+                        continue
+                
+                for action in actions:
+                    action.update_param(None, param, values)
+        
+        self.segment_list_update()
+        
+        #TODO: uncomment the below line to send to the AWG when recieving.
+        self.calculate_send()
             
     def segment_remove_all(self):
         self.segments = []
@@ -1348,7 +1427,7 @@ class MainWindow(QMainWindow):
         self.w = AmpAdjusterSettingsWindow(self,self.amp_adjuster_settings)
         self.w.show()
         
-    def set_amp_adjuster_settings(self,update_segment_list=True):
+    def set_amp_adjuster_settings(self,new_amp_adjuster_settings=None,update_segment_list=True):
         """Accepts new amp adjuster settings and passes them through to the 
         `AmpAdjuster2D` objects to update their parameters.
         
@@ -1360,18 +1439,22 @@ class MainWindow(QMainWindow):
         
         Parameters
         ----------
-        new_amp_adjuster_settings : list of dicts
+        new_amp_adjuster_settings : list of dicts or None
             A list of dicts containing the parameters of the AmpAdjusters to 
             set. The parameters should be ordered in the same order as the 
             AWG channels. Each dict is passed through to the corresponding 
             AmpAdjuster.
+            
+            If None, the current attribute amp_adjuster_settings will be used 
+            instead. This is used when loading in from a file.
             
             For the required dictonary keys, see the Attributes section of the
             `AmpAdjuster2D` class docstring.
         
         """
         logging.debug('Setting AmpAdjuster settings.')
-        new_amp_adjuster_settings = self.amp_adjuster_settings
+        if new_amp_adjuster_settings == None:
+            new_amp_adjuster_settings = self.amp_adjuster_settings
         if len(new_amp_adjuster_settings) < len(self.amp_adjusters):
             logging.error('Less AmpAdjuster settings are specified that the '
                           'number of AmpAdjusters ({}). Cancelling the new '
@@ -1392,28 +1475,51 @@ class MainWindow(QMainWindow):
         if update_segment_list:
             self.segment_list_update()
     
-    def update_card_settings(self,card_settings):
-        channels_changed = False
-        old_card_settings = self.card_settings
-        new_card_settings = {**old_card_settings,**card_settings}
-        for setting in card_settings.keys():
-            old_value = old_card_settings[setting]
-            new_value = new_card_settings[setting]
-            if new_value != old_value:
-                logging.warning('Changed card setting {} from {} to {}'.format(setting,old_value,new_value))
-                if setting == 'active_channels':
-                    channels_changed = True
-        for setting in new_card_settings.keys():
-            self.card_settings[setting] = new_card_settings[setting]
-        if channels_changed:
-            self._create_layout_autoplotter()
-            self.segment_remove_all()
-        else:
-            for segment in self.segments:
-                for action in segment:
-                    action.calculate_time()
-            self.segment_list_update()
+    def update_card_settings(self,card_settings=None):
+        """Updates the AWG settings with a new dictionary. The AWG object is 
+        closed if it already exists before being recreated with the new
+        settings.
+        
+        Parameters
+        ----------
+        card_settings : dict or None
+            The new card settings to apply to the AWG. If None the current 
+            card settings in the self.card_settings attribute are applied to 
+            the AWG by closing and reopening the object.
+        
+        """
         self.w = None
+        
+        if card_settings != None:
+            channels_changed = False
+            old_card_settings = self.card_settings
+            new_card_settings = {**old_card_settings,**card_settings}
+            
+            for setting in card_settings.keys():
+                old_value = old_card_settings[setting]
+                new_value = new_card_settings[setting]
+                if new_value != old_value:
+                    logging.warning('Changed card setting {} from {} to {}'.format(setting,old_value,new_value))
+                    if setting == 'active_channels':
+                        channels_changed = True
+            for setting in new_card_settings.keys():
+                self.card_settings[setting] = new_card_settings[setting]
+                
+            if channels_changed:
+                self._create_layout_autoplotter()
+                self.segment_remove_all()
+            else:
+                for segment in self.segments:
+                    for action in segment:
+                        action.calculate_time()
+                self.segment_list_update()
+            
+        try:
+            self.awg.close()
+        except Exception:
+            logging.debug("Tried to close AWG object but failed. This might be okay if one wasn't expected to exist.")
+            
+        self.awg = AWG(**self.card_settings)
 
     def prevent_freq_jumps(self):
         """Ensures frequency continuity between segments by ensuring that all
@@ -1721,24 +1827,26 @@ class MainWindow(QMainWindow):
                 
     def calculate_send(self):
         """Sends the data to the AWG card."""
+        self.calculate_all_segments()
         self.awg.load_all(self.segments, self.steps)
         self.segment_list_update()
-        
+    
     def awg_trigger(self):
-        """Forces the AWG to trigger with a software trigger. The check 
-        current step button is also updated.
+        """Forces the AWG to trigger with a software trigger. This is 
+        wrapped in a seperate function so that this method can be 
+        mapped to GUI elements even when the AWG object does not 
+        exist.
         
         """
         self.awg.trigger()
-        self.awg_update_current_step()
-        
+    
     def awg_update_current_step(self):
         """Gets the current step of the AWG and writes the value to the 
         check current step button in the GUI.
         
         """
         step = self.awg.get_current_step()
-        self.button_check_current_step.setText('Check current step: {}'.format(step))
+        self.button_check_current_step.setText('Check current step: {} (segment: {})'.format(step,self.steps[step]['segment']))
 
     def list_step_toggle_next_condition(self):
         """Toggles the next step condition of the selected step in the 

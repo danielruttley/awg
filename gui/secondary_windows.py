@@ -505,7 +505,7 @@ class AmpAdjusterSettingsWindow(QWidget):
             if not success:
                 overall_success = False
         if overall_success:
-            self.mainWindow.set_amp_adjuster_settings(aa_settings)
+            self.mainWindow.set_amp_adjuster_settings(new_amp_adjuster_settings=aa_settings)
     
 class AmpAdjusterSettingsChannelWidget(QWidget):
     def __init__(self,channel,settings):

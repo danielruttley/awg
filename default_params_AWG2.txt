@@ -1,0 +1,104 @@
+{
+    "card_settings": {
+        "active_channels": 2,
+        "sample_rate_Hz": 1024000000,
+        "max_output_mV": 282.0,
+        "number_of_segments": 64,
+        "segment_min_samples": 192,
+        "segment_step_samples": 32
+    },
+    "network_settings": {
+        "client_ip": "129.234.190.164",
+        "client_port": 8628,
+        "server_ip": "",
+        "server_port": 8629
+    },
+    "amp_adjuster_settings": [
+        {
+            "enabled": false,
+            "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_H_calFile_17.02.2022_0=0.txt",
+            "freq_limit_1_MHz": 85.0,
+            "freq_limit_2_MHz": 110.0,
+            "amp_limit_1": 0.0,
+            "amp_limit_2": 1.0,
+            "non_adjusted_amp_mV": 100.0
+        },
+        {
+            "enabled": false,
+            "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_V_calFile_17.02.2022_0=0.txt",
+            "freq_limit_1_MHz": 85.0,
+            "freq_limit_2_MHz": 115.0,
+            "amp_limit_1": 0.0,
+            "amp_limit_2": 1.0,
+            "non_adjusted_amp_mV": 100.0
+        }
+    ],
+    "rearr_settings": {
+        "channel": 0,
+        "start_freq_MHz": [
+            97,
+            100,
+            103,
+            106
+        ],
+        "target_freq_MHz": [
+            101.75
+        ]
+    },
+    "datagen_settings": {
+        "button_couple_steps_segments": true,
+        "button_prevent_freq_jumps": false,
+        "button_prevent_amp_jumps": false,
+        "button_freq_adjust_looped_segments": true,
+        "button_prevent_phase_jumps": false
+    },
+    "segments": [
+        {
+            "duration_ms": 1.0,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        100
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        110
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
+            }
+        }
+    ],
+    "steps": [
+        {
+            "segment": 0,
+            "number_of_loops": 1,
+            "after_step": "loop_until_trigger",
+            "rearr": false
+        }
+    ],
+    "rearr_state": null
+}

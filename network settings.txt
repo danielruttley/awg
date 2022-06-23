@@ -1,0 +1,23 @@
+=== testing ===
+    "network_settings": {
+        "client_ip": "localhost",
+        "client_port": 5063,
+		"server_ip": "",
+        "server_port": 5064
+    },
+
+=== AWG1 ===
+    "network_settings": {
+        "client_ip": "129.234.190.164",
+        "client_port": 8623,
+		"server_ip": "",
+        "server_port": 8626
+    },
+
+=== AWG2 ===
+    "network_settings": {
+        "client_ip": "129.234.190.164",
+        "client_port": 8628,
+		"server_ip": "",
+        "server_port": 8629
+    },
