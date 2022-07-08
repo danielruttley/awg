@@ -409,24 +409,26 @@ class StepCreationWindow(QWidget):
         self.main_window.step_add(step_params,self.editing)
 
 class RearrSettingsWindow(QWidget):
-    def __init__(self,mainWindow,rearr_settings):
+    def __init__(self,mainWindow):
         super().__init__()
         self.mainWindow = mainWindow
-        self.rearr_settings = rearr_settings
         self.setWindowTitle("rearrangement settings")
 
         layout = QVBoxLayout()
         self.setLayout(layout)
 
+        settings = ['start_freq_MHz','target_freq_MHz','channel','segment']
+
         self.layout_rearr_settings = QFormLayout()
-        for key in list(self.rearr_settings.keys()):
+        for key in settings:
+            value = getattr(self.mainWindow.rr,key)
             if key == 'channel':
                 widget = QComboBox()
                 widget.addItems([str(x) for x in list(range(self.mainWindow.card_settings['active_channels']))])
-                widget.setCurrentText(str(self.rearr_settings[key]))
+                widget.setCurrentText(str(value))
             else:
                 widget = QLineEdit()
-                widget.setText(str(self.rearr_settings[key]))
+                widget.setText(str(value))
                 if not 'freq' in key:
                     widget.setValidator(QDoubleValidator())
             self.layout_rearr_settings.addRow(key, widget)
@@ -437,7 +439,7 @@ class RearrSettingsWindow(QWidget):
         layout.addWidget(self.button_save)
            
     def update_rearr_settings(self):
-        new_rearr_settings = self.rearr_settings.copy()
+        new_rearr_settings = {}
         for row in range(self.layout_rearr_settings.rowCount()):
             key = self.layout_rearr_settings.itemAt(row,0).widget().text()
             widget = self.layout_rearr_settings.itemAt(row,1).widget()
@@ -450,7 +452,7 @@ class RearrSettingsWindow(QWidget):
                     logging.error('Could not evaluate {} for rearrangement setting {}'.format(widget.text(),key))
                     return
             else:
-                value = float(widget.text())
+                value = int(widget.text())
             new_rearr_settings[key] = value
         self.mainWindow.update_rearr_settings(new_rearr_settings)
         

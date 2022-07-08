@@ -175,12 +175,6 @@ class ActionContainer():
         value : list of (typically) float
             The list of values to change the arguement to.
 
-        Raises
-        ------
-        NameError
-            Raised if an invalid arguement for the given `target_function` is 
-            specfied.
-
         Returns
         -------
         None.
@@ -218,7 +212,7 @@ class ActionContainer():
                     self.equalise_param_lengths(len(value))
                     self.needs_to_calculate = True
             else:
-                raise NameError('{} is not a parameter for freq_{} function'.format(param,self.freq_function_name))
+                logging.warning('{} is not a parameter for freq_{} function. Ignoring.'.format(param,self.freq_function_name))
         elif target_function == 'amp':
             if param in inspect.getfullargspec(self.amp_function)[0]:
                 if value != self.amp_params[param]:
@@ -226,7 +220,7 @@ class ActionContainer():
                     self.equalise_param_lengths(len(value))
                     self.needs_to_calculate = True
             else:
-                raise NameError('{} is not a parameter for amp_{} function'.format(param,self.amp_function_name))  
+                logging.warning('{} is not a parameter for freq_{} function. Ignoring.'.format(param,self.freq_function_name))
     
     def update_param_single_tone(self,param,value,tone_index,target_function=None):
         """Updates the relvant function dictionary with a new parameter value
@@ -432,7 +426,6 @@ class ActionContainer():
                 
                 self.end_phase.append(phase_data[-1]%360)
             self.data = self.data[1:]
-            print(max(self.data))
             self.needs_to_calculate = False
             self.needs_to_transfer = True
     
@@ -454,7 +447,6 @@ class ActionContainer():
         """       
         if self.phase_behaviour == 'optimise':
             start_amp_mV = self.amp_adjuster.adjuster(self.freq_params['start_freq_MHz'],self.amp_params['start_amp'])
-            print(start_amp_mV)
             self.freq_params['start_phase'] = phase_minimise(self.freq_params['start_freq_MHz'],
                                                              start_amp_mV)
             self.needs_to_calculate = True
@@ -754,16 +746,21 @@ class ActionContainer():
     
     def amp_approx_exp(self,start_amp=1,end_amp=0,index=20,_time=None):
         """Approximate exponential ramp that starts and ends at the specified
-        value.
+        value. If the index is set to a negative value, the slowly 
+        rising part will be at the start instead.
         
         """
-        if index <= 1:
+        if abs(index) <= 1:
             logging.warning('amp_approx_exp index {} was invalid. Using '
                             'linear ramp instead.'.format(index))
             return self.amp_ramp(start_amp,end_amp,_time)
         if _time is None:
             _time = self.time
-        return np.flip((index**(_time/_time[-1])-1)/(index-1)*(start_amp-end_amp) + end_amp)
+        if index > 0:
+            return np.flip((index**(_time/_time[-1])-1)/(index-1)*(start_amp-end_amp) + end_amp)
+        else:
+            index = abs(index)
+            return ((index**(_time/_time[-1])-1)/(index-1)*(end_amp-start_amp) + start_amp)
     
     def amp_modulate(self,start_amp=0.8,mod_amp=0.2,mod_freq_kHz=10,_time=None):
         """Modulate the amplitude for parametric heating measurements.

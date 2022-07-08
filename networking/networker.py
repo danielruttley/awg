@@ -118,6 +118,7 @@ class Networker():
                 logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
             except SyntaxError:
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
+            self.server.add_message(1,'go'*1000)
         elif 'set_complete_data' in command:
             try:
                 arg = eval(arg)
@@ -128,9 +129,14 @@ class Networker():
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
             self.server.add_message(1,'go'*1000)
         elif 'load' in command:
-            self.main_window.load_params(arg)
+            filename_stripped = arg.split('.')[0]
+            self.main_window.load_params(filename_stripped+'.awg')
+            self.main_window.load_rearr_params(filename_stripped+'.awgrr')
+            self.main_window.calculate_send()
         elif 'save' in command:
-            self.main_window.save_params(arg)
+            filename_stripped = arg.split('.')[0]
+            self.main_window.save_params(filename_stripped+'.awg')
+            self.main_window.rr.save_params(filename_stripped+'.awgrr')
         elif 'trigger' in command:
             logging.info('Triggering AWG as requested by TCP command.')
             self.main_window.awg.trigger()

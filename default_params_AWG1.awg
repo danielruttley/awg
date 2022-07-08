@@ -1,0 +1,77 @@
+{
+    "card_settings": {
+        "active_channels": 1,
+        "sample_rate_Hz": 625000000,
+        "max_output_mV": 282,
+        "number_of_segments": 64,
+        "segment_min_samples": 192,
+        "segment_step_samples": 32
+    },
+    "amp_adjuster_settings": [
+        {
+            "enabled": true,
+            "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/938_calFile_06.04.2022_0=0.txt",
+            "freq_limit_1_MHz": 135.0,
+            "freq_limit_2_MHz": 195.0,
+            "amp_limit_1": 0.0,
+            "amp_limit_2": 1.0,
+            "non_adjusted_amp_mV": 100.0
+        },
+        {
+            "enabled": true,
+            "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/938_calFile_06.04.2022_0=0.txt",
+            "freq_limit_1_MHz": 135.0,
+            "freq_limit_2_MHz": 195.0,
+            "amp_limit_1": 0.0,
+            "amp_limit_2": 1.0,
+            "non_adjusted_amp_mV": 100.0
+        }
+    ],
+    "datagen_settings": {
+        "button_couple_steps_segments": true,
+        "button_prevent_freq_jumps": false,
+        "button_prevent_amp_jumps": false,
+        "button_freq_adjust_looped_segments": false,
+        "button_prevent_phase_jumps": false
+    },
+    "segments": [
+        {
+            "duration_ms": 0.0050176,
+            "phase_behaviour": "optimise",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        134.9250637755102,
+                        147.4808673469388,
+                        160.03667091836735,
+                        170.99808673469389
+                    ],
+                    "start_phase": [
+                        0.0,
+                        75.08262043050325,
+                        326.2331444563889,
+                        287.3099478531733
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.2,
+                        0.2,
+                        0.2,
+                        0.2
+                    ]
+                }
+            }
+        }
+    ],
+    "steps": [
+        {
+            "segment": 0,
+            "number_of_loops": 1,
+            "after_step": "loop_until_trigger",
+            "rearr": false
+        }
+    ]
+}

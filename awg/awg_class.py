@@ -334,16 +334,21 @@ class AWG():
         None.
 
         """
-        self.stop()
+        current_step, current_segment = self.get_current_step_segment()
+        
         
         for segment_index,segment in enumerate(segments):
             segment_data = []
-            # for action in segment: # removed because this function should only be called once all segments are calculated
-            #     action.calculate()
             if any([action.needs_to_transfer for action in segment]):
+                if segment_index == current_segment:
+                    logging.warning('The currently playing segment {} '
+                                    'needs to transfer. The card will '
+                                    'be stopped to transfer this '
+                                    'data.'.format(current_segment))
+                    self.stop()
                 for action in segment:
                     segment_data.append(action.data)
-                segment_data = self._multiplex(segment_data)
+                segment_data = self.multiplex(segment_data)
                 self._set_segment(segment_index,segment_data)
                 for action in segment:
                     action.needs_to_transfer = False
@@ -361,7 +366,7 @@ class AWG():
             
         self.start()
         
-    def get_current_step(self):
+    def get_current_step_segment(self):
         """Returns the current step and segment that the AWG card is on.
         
         Returns
@@ -372,11 +377,15 @@ class AWG():
         """
         current_step = int64(0)
         spcm_dwGetParam_i64(self.hCard, SPC_SEQMODE_STATUS, byref(current_step))
+
+        step_data = int64(0)
+        spcm_dwGetParam_i64(self.hCard,SPC_SEQMODE_STEPMEM0 + current_step.value, byref(step_data))
+        current_segment = int('1'*4,2) & step_data.value
         
-        return current_step.value
+        return current_step.value, current_segment
         
             
-    def _multiplex(self,arrays):
+    def multiplex(self,arrays):
         """Converts a list of np.ndarrays in the form of [a,a,,...], 
         [b,b,,...] into a multiplexed sequence [a,b,a,b,...].
         
@@ -391,7 +400,7 @@ class AWG():
             The multiplexed arrays.
             
         """
-        logging.debug('Multiplexing data.')
+        # logging.debug('Multiplexing data.')
         l = len(arrays)
         c = np.empty((len(arrays[0]) * l,), dtype=arrays[0].dtype)
         for x in range(l):
@@ -408,7 +417,7 @@ class AWG():
         segment_index : int
             The index of the segment to write the data to.
             
-        segment_data : numpy.ndarray
+        segment_data : numpy.ndarray of float
             The data to write in the segment. This should already be 
             multiplexed if using more than one channel. The data should be 
             floats with the value of the data in mV.
@@ -417,31 +426,71 @@ class AWG():
         -------
         None.
         
-        """     
+        """
+
+        logging.debug('Preparing and transferring segment {}.'.format(segment_index))
+        segment_data = self.prepare_segment_data(segment_data)
+        self.transfer_segment_data(segment_index,segment_data)
+
+    def prepare_segment_data(self,segment_data):
+        """Prepares the segment data to be transferred to the card. 
+        This function convert the amplitudes in mV to the int16 format 
+        required by the card. Data is assumed to already have been 
+        multiplexed if required.
+
+        Parameters
+        ----------
+        segment_data : numpy.ndarray of float
+            The data to write in the segment. This should already be 
+            multiplexed if using more than one channel. The data should be 
+            floats with the value of the data in mV.
+
+        Returns
+        -------
+        segment_data : numpy.ndarray of int16
+            The input segment_data array but now converted to int16 
+            format and capped at the amplitude limit of the AWG if 
+            needed.
+        """
         segment_data /= self.max_output_mV
-        print(max(segment_data))
         
         if any(segment_data > 1) or any(segment_data < -1):
-            logging.warning('Some of the data in segment {} was '
-                            'larger than the maximum amplitude of '
-                            '+/-{} mV. This data has been clipped to '
-                            'stay within the bounds.'.format(segment_index,self.max_output_mV))
+            logging.warning('Some of the data was larger than the '
+                            'maximum amplitude of +/-{} mV. This data '
+                            'has been rescaled to stay within the '
+                            'bounds.'.format(self.max_output_mV))
             # segment_data = segment_data.clip(max=1, min=-1)
             segment_data /= max(segment_data)
         segment_data = np.int16(segment_data*2**15)
+        return segment_data
+
+    def transfer_segment_data(self,segment_index,segment_data):
+        """Transfers the preprepared segment data to the card. This is 
+        in its own function so that it can be called when setting 
+        rearrangement segment data during runtime to be as speedy as 
+        possible. Not checks are performed on the data before transfer 
+        and it should already be in multiplexed int16 format. As few
+        checks as possible are performed before data is transferred.
         
+        Parameters
+        ----------
+        segment_index : int
+            The index of the segment to write the data to.
+            
+        segment_data : numpy.ndarray of int16
+            The data to write in the segment. This should already be 
+            multiplexed if using more than one channel. The data should 
+            already have been converted to int16 format.
+            
+        Returns
+        -------
+        None.
+        """
         dwSegmentLenSample = len(segment_data)
         
-        logging.debug('Preparing to transfer {} samples to segment {}.'.format(dwSegmentLenSample,segment_index))
-        
-        dwSegLenByte = uint32(dwSegmentLenSample * self.lBytesPerSample.value) 
-        
         # Set the segment number to edit and the segment size
-        dwError = spcm_dwSetParam_i32(self.hCard, SPC_SEQMODE_WRITESEGMENT, segment_index)
-        if dwError == ERR_OK:
-            dwError = spcm_dwSetParam_i32 (self.hCard, SPC_SEQMODE_SEGMENTSIZE,  int(dwSegmentLenSample/self.lNumChannels.value))
-        else:
-            logging.error('Failed to set active segment to segment {}.'.format(segment_index))
+        spcm_dwSetParam_i32(self.hCard, SPC_SEQMODE_WRITESEGMENT, segment_index)
+        spcm_dwSetParam_i32 (self.hCard, SPC_SEQMODE_SEGMENTSIZE,  int(dwSegmentLenSample/self.lNumChannels.value))
             
         # Write data to board (main) sample memory (manual p. 78). Most of the following code comes from the old AWG code.
         qwBufferSize = uint64(dwSegmentLenSample * self.lBytesPerSample.value)
@@ -472,26 +521,18 @@ class AWG():
         # Takes the void pointer to a int16 POINTER type.
         # This only changes the way that the program reads that memory spot.
         pnBuffer = cast(pvBuffer, ptr16)
-        
-        # print(segment_data)
 
         lib = ctypes.cdll.LoadLibrary(r"Z:\Tweezer\Code\Python 3.9\awg\awg\memCopier\bin\Debug\memCopier.dll")
         lib.memCopier(pvBuffer,np.ctypeslib.as_ctypes(segment_data),int(dwSegmentLenSample))
         
         dwNotifySize = uint32(0)
-        
-        if dwError == ERR_OK:
-            dwError = spcm_dwDefTransfer_i64(self.hCard, SPCM_BUF_DATA, SPCM_DIR_PCTOCARD, dwNotifySize, pvBuffer, 0, qwBufferSize)
-        else:
-            logging.error('Did not transfer data to buffer')
-            
-        if dwError == ERR_OK:
-            dwError = spcm_dwSetParam_i32(self.hCard, SPC_M2CMD, M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)
-        else:
-            logging.error('Failed to define the transfer buffer (check 4kB size limit on dwNotifySize).')
-            
+        spcm_dwDefTransfer_i64(self.hCard, SPCM_BUF_DATA, SPCM_DIR_PCTOCARD, dwNotifySize, pvBuffer, 0, qwBufferSize)
+        dwError = spcm_dwSetParam_i32(self.hCard, SPC_M2CMD, M2CMD_DATA_STARTDMA | M2CMD_DATA_WAITDMA)
+
         if dwError != ERR_OK:
             logging.error('Failed to transfer data to card for segment {}'.format(segment_index))
+        else:
+            logging.debug('{} samples transferred to segment {}.'.format(dwSegmentLenSample,segment_index))
         
     def _set_step(self,step_index,segment,number_of_loops,after_step,next_step_index,**kwargs):
         """
