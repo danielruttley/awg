@@ -73,7 +73,6 @@ class RearrangementHandler():
         """
 
         self.main_window = main_window
-        
         self.load_params(filename)
         
     def create_actions(self,segment_params_list=None):
@@ -103,9 +102,12 @@ class RearrangementHandler():
                     for shared_segment_param in shared_segment_params:
                         channel_params[shared_segment_param] = segment_params[shared_segment_param]
                     if segment_index in [0, self.segment, len(segment_params_list)-1]:
-                        print('optimise',segment_index)
                         channel_params['phase_behaviour'] = 'optimise'
-                    channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
+                    print('check active channels',channel,segment_params)
+                    try:
+                        channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
+                    except KeyError:
+                        channel_params = {**channel_params,**segment_params['Ch0']} #will fall back on Ch0 if there are not enough channels in rr params
                     action = ActionContainer(channel_params,self.main_window.card_settings,self.main_window.amp_adjusters[channel])
                     segment.append(action)
                 self.base_segments.append(segment)
@@ -277,11 +279,14 @@ class RearrangementHandler():
         for trap in string:
             if final_string.count('1') == len(self.target_freq_MHz):
                 final_string += '0'
+            elif final_string.count('1') >= string.count('1'):
+                final_string += '1'
             else:
                 final_string += trap
-        if final_string.count('1') == 0:
-            final_string = '1' + final_string[1:]
         string = final_string
+
+        logging.debug('Processed recieved string {} as {}'.format(
+                       recieved_string, string))
 
         # if occupied_traps < len(self.target_freq_MHz):
         #     logging.debug('Not enough initial traps loaded for successful '
