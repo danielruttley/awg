@@ -29,6 +29,8 @@ from .secondary_windows import (CardSettingsWindow, SegmentCreationWindow,
 if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+main_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 from actions import ActionContainer, AmpAdjuster2D, shared_segment_params
 from rearrangement import RearrangementHandler
 from awg import AWG
@@ -133,7 +135,7 @@ class MainWindow(QMainWindow):
         
         self.load_params(params_filename,update_list_when_loaded=False)
         self.networker = Networker(main_window=self,**network_settings)
-        self.rr = RearrangementHandler(self,r"Z:\Tweezer\Code\Python 3.9\awg\rearrangement\default_rearr_params_{}.awgrr".format(name))
+        self.rr = RearrangementHandler(self,main_directory+r"\rearrangement\default_rearr_params_{}.awgrr".format(name))
 
         self.calculate_send()
 

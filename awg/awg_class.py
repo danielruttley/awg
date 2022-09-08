@@ -9,6 +9,9 @@ from copy import copy
 from .pyspcm import *
 from .spcm_tools import *
 
+import os
+main_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 class AWG():
     """Defines the AWG wrapper class for handling interfacing with the AWG.
     The class is designed to use the sequence mode of the AWG.
@@ -522,7 +525,7 @@ class AWG():
         # This only changes the way that the program reads that memory spot.
         pnBuffer = cast(pvBuffer, ptr16)
 
-        lib = ctypes.cdll.LoadLibrary(r"Z:\Tweezer\Code\Python 3.9\awg\awg\memCopier\bin\Debug\memCopier.dll")
+        lib = ctypes.cdll.LoadLibrary(main_directory+r"\awg\memCopier\bin\Debug\memCopier.dll")
         lib.memCopier(pvBuffer,np.ctypeslib.as_ctypes(segment_data),int(dwSegmentLenSample))
         
         dwNotifySize = uint32(0)
