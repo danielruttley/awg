@@ -131,7 +131,7 @@ class Networker():
         elif 'load' in command:
             filename_stripped = arg.split('.')[0]
             self.main_window.load_params(filename_stripped+'.awg')
-            self.main_window.load_rearr_params(filename_stripped+'.awgrr')
+            # self.main_window.load_rearr_params(filename_stripped+'.awgrr')
             self.main_window.calculate_send()
         elif 'save' in command:
             filename_stripped = arg.split('.')[0]

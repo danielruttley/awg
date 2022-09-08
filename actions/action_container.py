@@ -769,6 +769,8 @@ class ActionContainer():
         but this shouldn't matter for a parametric heating measurement.
         
         """
+        if _time is None:
+            _time = self.time
         return mod_amp*np.sin(2*np.pi*mod_freq_kHz*1e3*_time)+start_amp
     
 if __name__ == '__main__':

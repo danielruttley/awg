@@ -7,15 +7,9 @@
         "segment_min_samples": 192,
         "segment_step_samples": 32
     },
-    "network_settings": {
-        "client_ip": "129.234.190.164",
-        "client_port": 8628,
-        "server_ip": "",
-        "server_port": 8629
-    },
     "amp_adjuster_settings": [
         {
-            "enabled": false,
+            "enabled": true,
             "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_H_calFile_17.02.2022_0=0.txt",
             "freq_limit_1_MHz": 85.0,
             "freq_limit_2_MHz": 110.0,
@@ -24,7 +18,7 @@
             "non_adjusted_amp_mV": 100.0
         },
         {
-            "enabled": false,
+            "enabled": true,
             "filename": "Z:/Tweezer/Experimental/Setup and characterisation/Settings and calibrations/tweezer calibrations/AWG calibrations/814_V_calFile_17.02.2022_0=0.txt",
             "freq_limit_1_MHz": 85.0,
             "freq_limit_2_MHz": 115.0,
@@ -33,18 +27,6 @@
             "non_adjusted_amp_mV": 100.0
         }
     ],
-    "rearr_settings": {
-        "channel": 0,
-        "start_freq_MHz": [
-            97,
-            100,
-            103,
-            106
-        ],
-        "target_freq_MHz": [
-            101.75
-        ]
-    },
     "datagen_settings": {
         "button_couple_steps_segments": true,
         "button_prevent_freq_jumps": false,
@@ -99,6 +81,5 @@
             "after_step": "loop_until_trigger",
             "rearr": false
         }
-    ],
-    "rearr_state": null
+    ]
 }

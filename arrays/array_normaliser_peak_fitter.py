@@ -10,6 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from math import log10,floor,ceil
+from scipy.signal import find_peaks
 
 if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,6 +49,7 @@ class ArrayNormaliser():
         if start_amp == None:
             start_amp = [1/len(start_freq_MHz)]*len(start_freq_MHz)
         self.start_amp = start_amp
+        self.total_start_amp = sum(self.start_amp)
             
         self.server = PyServer(host='', port=int(port))
         self.server.start()
@@ -57,7 +59,7 @@ class ArrayNormaliser():
         self.server.add_message(1,'load='+filename+'#'*1000)
         
         self.set_freq(self.start_freq_MHz,self.start_amp)
-        self.fit_single_traps()
+        # self.fit_single_traps()
         # loaded_df = pd.read_csv('trap_df.csv',index_col=0)
         # for key in loaded_df.keys():
         #     if ('single' in key) or ('freq_MHz' in key):
@@ -67,6 +69,7 @@ class ArrayNormaliser():
         print(self.trap_df)
         
         for i in range(iterations):
+            print('\n--- ITERATION {} OF {} ---'.format(i+1,iterations))
             self.fit_traps(i)
         
     def set_freq(self,start_freq_MHz,start_amp=None):
@@ -191,79 +194,39 @@ class ArrayNormaliser():
         array = self.take_image()
         print(np.max(array))
         
-        popts = []
-        perrs = []
-        for i, row in self.trap_df.iterrows():
-            print(i)
-            x0 = row['single_x0']
-            y0 = row['single_y0']
-            wx = row['single_wx']
-            wy = row['single_wy']
-            theta = row['single_theta']
-            print(x0,y0)
-            xmin = max(round(x0-1.5*wx),0)
-            xmax = min(round(x0+1.5*wx),array.shape[1])
-            ymin = max(round(y0-1.5*wx),0)
-            ymax = min(round(y0+1.5*wx),array.shape[0])
-            print(xmin,ymin,xmax,ymax)
-            roi = array[ymin:ymax,xmin:xmax]
-            print('array_max',np.max(array))
-            print('roi_max',np.max(roi))
-            max_val = np.max(array)
-            x,y = np.meshgrid(np.arange(xmin,xmax),np.arange(ymin,ymax))
-            # plt.pcolormesh(x,y,roi)
-            # plt.colorbar()
-            # plt.show()
-            popt, pcov = curve_fit(self.gaussian2D, (x,y), roi.ravel(), p0=[max_val,x0,y0,wx,wy,theta])
-            perr = np.sqrt(np.diag(pcov))
-            popts.append(popt)
-            perrs.append(perr)
-            for arg,val,err in zip(self.gaussian2D.__code__.co_varnames[2:],popt,perr):
-                prec = floor(log10(err))
-                err = round(err/10**prec)*10**prec
-                val = round(val/10**prec)*10**prec
-                if prec > 0:
-                    valerr = '{:.0f}({:.0f})'.format(val,err)
-                else:
-                    valerr = '{:.{prec}f}({:.0f})'.format(val,err*10**-prec,prec=-prec)
-                print(arg,'=',valerr)
-                self.trap_df.loc[i,'multi_{}_{}'.format(iteration,arg)] = val
-                self.trap_df.loc[i,'multi_{}_{}_err'.format(iteration,arg)] = err
-            print('\n')
+        max_pixel = np.unravel_index(np.argmax(array, axis=None), array.shape)
+        y_axis = np.argmax(array.sum(axis=0))
         
-            self.trap_df.loc[i,'multi_{}_sum'.format(iteration)] = roi.sum().astype('float64')
+        # plt.imshow(array)
+        # plt.axvline(y_axis,c='k',linestyle='--')
+        # plt.ylabel('y (pixels)')
+        # plt.xlabel('x (pixels)')
+        # plt.show()
         
-        if plot:
-            fitted_img = np.zeros_like(array).astype('float64')
-            x, y = np.meshgrid(np.arange(array.shape[1]), range(array.shape[0]))
-            for popt in popts:
-                # print(self.gaussian2D((x,y),*popt).reshape(array.shape[0],array.shape[1]))
-                fitted_img += self.gaussian2D((x,y),*popt).reshape(array.shape[0],array.shape[1]).astype('float64')
-
-            fig, (ax1,ax2) = plt.subplots(1, 2)
-            fig.set_size_inches(9, 5)
-            fig.set_dpi(100)
-            c1 = ax1.pcolormesh(x,y,array,cmap=plt.cm.viridis,shading='auto')
-            ax1.invert_yaxis()
-            ax1.set_title('camera image')
-            fig.colorbar(c1,ax=ax1,label='pixel count')
-            c2 = ax2.pcolormesh(x,y,fitted_img,cmap=plt.cm.viridis,shading='auto')
-            ax2.invert_yaxis()
-            ax2.set_title('fitted array')
-            fig.colorbar(c2,ax=ax2,label='intensity (arb.)')
-            fig.tight_layout()
-            plt.show()
+        array_slice = array[:,y_axis]
+        peaks, props = find_peaks(array_slice, distance = self.distance_between_traps, height = max(array_slice)/2)
+        # df.loc[time,'datetime'] = datetime.fromtimestamp(int(float(time)))
+        
+        # for i,peak in enumerate(peaks):
+        #     df.loc[time,'peak_{}'.format(i)] = array_slice[peak]
+        
+        for i,(freq,peak) in enumerate(zip(self.start_freq_MHz,peaks)):
+            peak_val = array_slice[peak]
+            self.trap_df.loc[i,'iteration_{}_peak'.format(iteration,)] = peak_val
         
         # self.trap_df['start_amp_{}'.format(iteration+1)] = self.trap_df['multi_{}_I0'.format(iteration)].mean()/self.trap_df['multi_{}_I0'.format(iteration)]
         # self.trap_df['start_amp_{}'.format(iteration+1)] = self.trap_df['start_amp_{}'.format(iteration+1)]*0.125/self.trap_df['start_amp_{}'.format(iteration+1)].mean()
         
-        self.trap_df['start_amp_{}'.format(iteration+1)] = self.trap_df['start_amp_{}'.format(iteration)]*(self.trap_df['multi_0_I0'].mean()/self.trap_df['multi_{}_I0'.format(iteration)])**self.scale_index
+        new_start_amps = self.trap_df['start_amp_{}'.format(iteration)]*(self.trap_df['iteration_{}_peak'.format(iteration)].mean()/self.trap_df['iteration_{}_peak'.format(iteration)])**self.scale_index
+        self.trap_df['start_amp_{}'.format(iteration+1)] = new_start_amps*self.total_start_amp/sum(new_start_amps)
         
         # self.trap_df['start_amp_{}'.format(iteration+1)] = self.trap_df['start_amp_{}'.format(iteration)]*(self.trap_df['multi_0_sum'].mean()/self.trap_df['multi_{}_sum'.format(iteration)])
         
         self.trap_df.to_csv('trap_df.csv')
         
         self.start_amp = list(self.trap_df['start_amp_{}'.format(iteration+1)])
+        print('next start amps:',self.start_amp)
+        print('total start amps:',sum(self.start_amp))
         
         self.set_freq(self.start_freq_MHz,self.start_amp)
             
@@ -281,15 +244,15 @@ class ArrayNormaliser():
 if __name__ == '__main__':
     name = 'AWG2'
     port = 8740
-    start_freq_MHz = [106,104,102,100,98,96,94,92]
+    start_freq_MHz = [106,104,102,100]
     # start_amp = [0.3]*len(start_freq_MHz)
     start_amp = None
     iterations = 10
     channel = 0
-    exposure_ms = 0.5
-    roi = (61,300,264,1045)
-    scale_index = 1
-    distance_between_traps = 10
+    exposure_ms = 20
+    roi = (197,189,416,615)
+    scale_index = 0.5
+    distance_between_traps = 50
     
     norm = ArrayNormaliser(name=name,
                            port=port,

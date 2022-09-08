@@ -11,6 +11,6 @@ network_settings = {"client_ip": "localhost",
                     "server_port": 8741}
 
 app = QApplication(sys.argv)
-boss = MainWindow('AWG1','default_params_AWG1.awg',network_settings)
+boss = MainWindow('AWG1','default_params_AWG1.awg',network_settings,testing=True)
 boss.show()
 app.exec()
