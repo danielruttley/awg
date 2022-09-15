@@ -54,9 +54,11 @@ class Networker():
         self.client = PyClient(host=client_ip,port=int(client_port))
         self.client.start()
         self.client.textin.connect(self.recieved_tcp_msg)
+        logging.info('Listening TCP client on {}:{}.'.format(client_ip,client_port))
         
         self.server = PyServer(host=server_ip, port=int(server_port)) # TCP server to message PyDex
         self.server.start()
+        logging.info('Starting response server on {}:{}.'.format(server_ip,server_port))
         
     def recieved_tcp_msg(self,msg):
         """Takes the recieved TCP messages and performs the action that 
@@ -118,7 +120,7 @@ class Networker():
                 logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
             except SyntaxError:
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
-            self.server.add_message(1,'go'*1000)
+            self.server.priority_messages([[1,'go'*1000]])
         elif 'set_complete_data' in command:
             try:
                 arg = eval(arg)
@@ -127,7 +129,7 @@ class Networker():
                 logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
             except SyntaxError:
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
-            self.server.add_message(1,'go'*1000)
+            self.server.priority_messages([[1,'go'*1000]])
         elif 'load' in command:
             filename_stripped = arg.split('.')[0]
             self.main_window.load_params(filename_stripped+'.awg')

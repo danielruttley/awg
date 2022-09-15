@@ -100,6 +100,7 @@ class PyServer(QThread):
         text - (str) the message to send.
         enum and message length are sent as unsigned long int (4 bytes)."""
         if not self.__lock:
+            logging.debug('Appending TCP message to queue: {}...'.format(text[:100]))
             self.__mq.append([struct.pack("!L", int(enum)), # enum 
                                 struct.pack("!L", len(bytes(text, encoding))), # msg length 
                                 bytes(text, encoding)]) # message
@@ -107,6 +108,7 @@ class PyServer(QThread):
     def priority_messages(self, message_list, encoding=enco):
         """Add messages to the start of the message queue.
         message_list - list of [enum (int), text(str)] pairs."""
+        logging.debug('Adding priority TCP messages to front of queue: {}...'.format(message_list))
         self.__mq = [[struct.pack("!L", int(enum)), # enum 
                             struct.pack("!L", len(bytes(text, encoding))), # msg length 
                             bytes(text, encoding)] for enum, text in message_list] + self.__mq
