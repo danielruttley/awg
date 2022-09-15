@@ -10,7 +10,7 @@ from copy import deepcopy
 os.system("color")
 
 #from qtpy.QtCore import QThread,Signal,Qt
-from qtpy.QtCore import Qt, QThreadPool
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (QApplication,QMainWindow,QVBoxLayout,QWidget,
                             QAction,QListWidget,QFormLayout,QComboBox,QLineEdit,
                             QTextEdit,QPushButton,QFileDialog,QAbstractItemView,
@@ -105,9 +105,6 @@ class MainWindow(QMainWindow):
                                     "server_port": 5064},
                     testing=False):
         super().__init__()
-
-        self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
         self.name = name        
         self.last_AWGparam_folder = '.'

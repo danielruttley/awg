@@ -10,12 +10,9 @@ import json
 import itertools
 import time
 
-from qtpy.QtCore import Slot, Signal
-
 from os import path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from actions import ActionContainer, shared_segment_params
-from workers import Worker
 
 params_to_save = ['start_freq_MHz','target_freq_MHz','channel','segment']
 
@@ -184,37 +181,19 @@ class RearrangementHandler():
         -------
         None.
         """
-        self.rearr_segments_data = [None]*len(self.rearr_segments)
+        self.rearr_segments_data = []
 
         for segment_index, segment in enumerate(self.rearr_segments):
-            worker = Worker(self.calculate_single_rearr_segment_data, segment_index, segment)
-            worker.signals.result.connect(self.store_single_rearr_segment_data)
-            self.main_window.threadpool.start(worker)
-        self.main_window.threadpool.waitForDone()
-
-    def calculate_single_rearr_segment_data(self, segment_index, segment):
-        """Wrapper function to allow each rearrangement segment data to be 
-        handled individually by a worker function. Once complete the worker
-        will trigger a signal to set the data in the correct index of the 
-        full list.
-        
-        """
-        segment_data = []
-        for action_index, action in enumerate(segment):
-            if action.needs_to_calculate:
-                logging.debug('Calculating rearrangement segment R{} data, channel {}.'.format(segment_index,action_index))
-                action.set_start_phase(None)
-                action.calculate
-            segment_data.append(action.data)
-        segment_data = self.main_window.awg.multiplex(segment_data)
-        segment_data = self.main_window.awg.prepare_segment_data(segment_data)
-        return [segment_index, segment_data]
-
-    def store_single_rearr_segment_data(self, segment_index_data):
-        [segment_index, segment_data] = segment_index_data
-        self.rearr_segments_data[segment_index] = segment_data
-        logging.debug('Storing rearrangement segment R{} data. Total stored segments {}/{}.'.format(
-            segment_index,sum(x is not None for x in self.rearr_segments_data),len(self.rearr_segments_data)))
+            segment_data = []
+            for action_index, action in enumerate(segment):
+                if action.needs_to_calculate:
+                    logging.debug('Calculating rearrangement segment R{} data, channel {}.'.format(segment_index,action_index))
+                    action.set_start_phase(None)
+                    action.calculate()
+                segment_data.append(action.data)
+            segment_data = self.main_window.awg.multiplex(segment_data)
+            segment_data = self.main_window.awg.prepare_segment_data(segment_data)
+            self.rearr_segments_data.append(segment_data)
     
     def generate_segment_ids(self):
         """Generates the potential segment ids to index segments.

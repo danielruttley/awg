@@ -410,7 +410,7 @@ class ActionContainer():
         is stored in the attribute `data`.
 
         """
-
+        
         if self.needs_to_calculate:
             self.data = np.zeros_like(self.time)
             self.end_phase = []
