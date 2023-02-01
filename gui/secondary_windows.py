@@ -145,7 +145,7 @@ class SegmentCreationWindow(QWidget):
             index = channel_widget.channel_index
 
             channel_params = {}
-            channel_success, channel_params['freq'], channel_params['amp'] = channel_widget.get_params()
+            channel_success, channel_params['freq'], channel_params['amp'], channel_params['amp_comp_filename'] = channel_widget.get_params()
 
             segment_params['Ch{}'.format(index)] = channel_params
             
@@ -223,6 +223,15 @@ class SegmentChannelWidget(QWidget):
 
         self.layout_amp_params = QFormLayout()
         layout.addLayout(self.layout_amp_params)
+
+        layout_amp_comp = QGridLayout()
+        layout_amp_comp.addWidget(QLabel('Amp compensation file:'),0,0,1,1)
+        self.label_amp_comp_filename = QLabel('None')
+        layout_amp_comp.addWidget(self.label_amp_comp_filename,0,1,1,4)
+        amp_comp_browse_button = QPushButton('Browse')
+        amp_comp_browse_button.clicked.connect(self.open_amp_comp_browse_window)
+        layout_amp_comp.addWidget(amp_comp_browse_button,0,5,1,1)
+        layout.addLayout(layout_amp_comp)
 
         self.update_freq_arguments()
         self.update_amp_arguments()
@@ -324,7 +333,14 @@ class SegmentChannelWidget(QWidget):
                 widget.setStyleSheet('')
                 amp_params[key] = value
 
-        return success, freq_params, amp_params
+        amp_comp_filename = self.label_amp_comp_filename.text()
+
+        return success, freq_params, amp_params, amp_comp_filename
+
+    def open_amp_comp_browse_window(self):
+        filename = QFileDialog.getOpenFileName(self, 'Load amplitude compensation file','.',"Text documents (*.txt)")[0]
+        if filename != '':
+            self.label_amp_comp_filename.setText(filename)
 
 class StepCreationWindow(QWidget):
     def __init__(self,main_window,editing=None):

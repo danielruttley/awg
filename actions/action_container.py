@@ -3,6 +3,9 @@ import sys
 import inspect
 import numpy as np
 from copy import copy, deepcopy
+from scipy.interpolate import interp1d
+
+import matplotlib.pyplot as plt
 
 from .phase_minimiser import phase_minimise
 
@@ -108,6 +111,14 @@ class ActionContainer():
         self.freq_function_name = self.freq_params.pop('function')
         self.amp_params = action_params['amp']
         self.amp_function_name = self.amp_params.pop('function')
+
+        try:
+            self.amp_comp_filename = action_params['amp_comp_filename']
+        except Exception as e:
+            print(e)
+            self.amp_comp_filename = None
+
+        print('amp_comp_filename:',self.amp_comp_filename)
 
         self.card_settings = card_settings
 
@@ -418,9 +429,11 @@ class ActionContainer():
             for tone_freq_params,tone_amp_params in zip(self.transpose_params(self.freq_params),self.transpose_params(self.amp_params)):
                 freq_data = self.freq_function(**tone_freq_params)
                 amp_data = self.amp_function(**tone_amp_params)
+                # amp_data = self.apply_amp_compensation(amp_data)
                 
                 phase_data = self.calculate_phase(freq_data,tone_freq_params['start_phase'])
                 amp_data_mV = self.amp_adjuster.adjuster(freq_data,amp_data)
+                amp_data_mV = self.apply_amp_compensation(amp_data_mV)
                 
                 self.data += amp_data_mV*np.sin(phase_data*2*np.pi/360)#*1e-9
                 
@@ -516,6 +529,38 @@ class ActionContainer():
 
         """
         return self.amp_function(**amp_params)
+
+    def apply_amp_compensation(self,amp):
+        """Applies a compensation to the amplitude based on an input .csv file.
+        This file should be a single column of numbers which will be 
+        interpolated across the existing amplitude to apply a correction.
+
+        If the attribute `amp_comp_filename` is not a valid amplitude 
+        compensation file, no amplitude compensation will be applied.
+        
+        Parameters
+        ----------
+        amp : `numpy` array containing the amplitude to be compensated.
+        
+        """
+        
+        try:
+            amp_comp = np.genfromtxt(self.amp_comp_filename, delimiter=',')
+            logging.debug('Applying amplitude compensation {}'.format(self.amp_comp_filename))
+        except ValueError as e: # amplitude compensation is None so don't need to apply a correction
+            return amp
+
+        amp_comp = amp_comp.clip(min=0)
+        amp_comp_interp = interp1d(np.arange(amp_comp.size),amp_comp)
+        amp_comp_adjusted = amp_comp_interp(np.linspace(0,amp_comp.size-1,amp.size))
+
+        amp_scaled = amp/amp.mean()
+        amp_comp_scaled = amp_comp_adjusted/amp_comp_adjusted.mean()
+
+        amp_corrected = np.nan_to_num(amp*(amp_scaled/amp_comp_scaled))
+        amp_corrected = amp_corrected.clip(min=np.min(amp)/2,max=2*np.max(amp))
+
+        return amp_corrected
         
     def calculate_phase(self,freq_data,initial_phase): 
         """Integrates the frequency profile of a single tone with time to 
@@ -724,6 +769,24 @@ class ActionContainer():
         if _T == None:
             _T = _time[-1] - _time[0]
         return d*(10*(_time/_T)**3 - 15*(_time/_T)**4 + 6*(_time/_T)**5) + start_freq_MHz
+
+    def freq_noisy_sweep(self,start_freq_MHz=100,end_freq_MHz=101,hybridicity=1,
+                         start_phase=0,noise_width_MHz=10,_time=None):
+        if _time is None:
+            _time = self.time
+        freq = self.freq_sweep(start_freq_MHz,end_freq_MHz,
+                                hybridicity,start_phase,_time)
+        freq += np.random.uniform(low=-noise_width_MHz/2, high=noise_width_MHz/2, size=(len(freq)))
+        return freq
+
+    def freq_dithered_sweep(self,start_freq_MHz=100,end_freq_MHz=101,hybridicity=1,
+                        start_phase=0,dither_amp_MHz=10,dither_freq_MHz=1,_time=None):
+        if _time is None:
+            _time = self.time
+        freq = self.freq_sweep(start_freq_MHz,end_freq_MHz,
+                                hybridicity,start_phase,_time)
+        freq += dither_amp_MHz*np.sin(2*np.pi*_time*dither_freq_MHz*1e6)
+        return freq
     
     def amp_static(self,start_amp=1,_time=None):
         if _time is None:

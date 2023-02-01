@@ -359,7 +359,7 @@ class MainWindow(QMainWindow):
         
         self.button_autoplot = QCheckBox("Autoplot")
         self.button_autoplot.clicked.connect(self.plot_autoplot_graphs)
-        self.button_autoplot.setChecked(True)
+        # self.button_autoplot.setChecked(True)
         layout_autoplot_options.addWidget(self.button_autoplot)
         
         self.button_autoplot_condense_rearr = QCheckBox("Condense rearrange segments")
@@ -1668,10 +1668,10 @@ class MainWindow(QMainWindow):
                 if not found_existing_step:
                     new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
             self.steps = new_steps
-            try:
-                self.steps[-1]['after_step'] = 'loop_until_trigger'
-            except IndexError:
-                pass
+            # try:
+            #     self.steps[-1]['after_step'] = 'loop_until_trigger'
+            # except IndexError:
+            #     pass
         
             logging.debug('Coupled steps with segments.')
         self.step_list_update()

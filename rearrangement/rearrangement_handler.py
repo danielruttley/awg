@@ -187,7 +187,7 @@ class RearrangementHandler():
             segment_data = []
             for action_index, action in enumerate(segment):
                 if action.needs_to_calculate:
-                    logging.debug('Calculating rearrangement segment R{} data, channel {}.'.format(segment_index,action_index))
+                    logging.debug('Calculating rearrangement segment R{}/{} data, channel {}.'.format(segment_index,len(self.rearr_segments),action_index))
                     action.set_start_phase(None)
                     action.calculate()
                 segment_data.append(action.data)
