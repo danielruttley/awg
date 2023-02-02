@@ -128,72 +128,105 @@ class RearrangementHandler():
         self.create_rearr_actions()
 
     def create_rearr_actions(self):
-        """Creates duplicates of the necessary `ActionContainer` for 
-        the rearrangement segments, one of which will be picked at 
-        runtime."""
+        """Creates a list of movements for the different rearrangement
+        segments and assigns these to a rearrangement keys. During runtime 
+        the correct tones are picked from the dictionary and summed.
+        """
+        np.random.seed(817)
         base_segment = self.base_segments[self.segment]
 
         occupation_start_freqs = self.get_occupation_freqs()
         
-        self.rearr_segments = []
+        self.rearr_movements = []
 
         for start_freqs_MHz,occupation in zip(occupation_start_freqs,self.occupations):
-            rr_seg = []
+            num_occupied_traps = occupation.count('1')
+            rr_start_freqs_MHz = start_freqs_MHz[:num_occupied_traps]
+            rr_target_freqs_MHz = self.target_freq_MHz[:num_occupied_traps]
+
+            freq_movements = tuple(zip(rr_start_freqs_MHz,rr_target_freqs_MHz))
+            self.rearr_movements.append(freq_movements)
+        
+        self.rearr_unique_movements = set(itertools.chain.from_iterable([list(x) for x in self.rearr_movements]))
+
+        logging.debug('Calculated rearrangement movements {}'.format(self.rearr_movements))
+        logging.debug('Unique rearrangement movements are {}'.format(self.rearr_unique_movements))
+
+        self.rearr_segments = {}
+        for start_freq_MHz,end_freq_MHz in self.rearr_unique_movements:
+            try:
+                start_freq_dict = self.rearr_segments[start_freq_MHz]
+            except KeyError: # key does not exist yet so make the dict and store it
+                self.rearr_segments[start_freq_MHz] = {}
+                start_freq_dict = self.rearr_segments[start_freq_MHz]
+            actions = [] # store the action for all channels
             for channel in range(self.main_window.card_settings['active_channels']):
                 if channel == self.channel:
                     rearr_action_params = base_segment[channel].get_action_params()
                     freq_params = rearr_action_params['freq']
-                    amp_params = rearr_action_params['amp']
-                    
-                    num_occupied_traps = occupation.count('1')
+                    amp_params = rearr_action_params['amp']                   
 
                     for key,value in freq_params.items():
                         if key == 'start_freq_MHz':
-                            freq_params[key] = start_freqs_MHz[:num_occupied_traps]
+                            freq_params[key] = [start_freq_MHz]
                         elif key == 'end_freq_MHz':
-                            freq_params[key] = self.target_freq_MHz[:num_occupied_traps]
+                            freq_params[key] = [end_freq_MHz]
                         elif key == 'function':
                             pass
                         else:
-                            freq_params[key] = [freq_params[key][0]]*num_occupied_traps
+                            freq_params[key] = [freq_params[key][0]] # only want one tone so only keep the first entry in the list
                     for key,value in amp_params.items():
                         if key == 'function':
                             pass
                         else:
-                            amp_params[key] = [amp_params[key][0]]*num_occupied_traps
-
-                    print(occupation,freq_params)
+                            amp_params[key] = [amp_params[key][0]]
 
                     action = ActionContainer(rearr_action_params,self.main_window.card_settings,self.main_window.amp_adjusters[channel])
                     action.rearr = True
-                    rr_seg.append(action)
+                    action.update_param(param='phase_behaviour',value=['manual'])
+                    action.set_start_phase([np.random.random()*360]) # sets phase to random in degrees
+                    actions.append(action)
                 else:
-                    rr_seg.append(base_segment[channel])
-            self.rearr_segments.append(rr_seg)
+                    actions.append(base_segment[channel])
+                start_freq_dict[end_freq_MHz] = actions
+        print(self.rearr_segments)
         
     def calculate_rearr_segment_data(self):
-        """Takes the data from the ActionContainers for the 
-        rearrangement segments and precalculates the int16 data 
-        to be sent to the card at runtime so that the transfer 
-        is performed as quickly as possible.
+        """Takes the data from the ActionContainers for the rearrangement 
+        segments and precalculates the int16 data to be sent to the card at 
+        runtime. Each tone corresponding to the movement from one trap to 
+        another is calculated. These tones will then be summed at runtime so 
+        that the transfer is performed as quickly as possible whilst minimising
+        the number of initial calculations needed.
         
         Returns
         -------
         None.
         """
-        self.rearr_segments_data = []
+        self.rearr_segments_data = {}
 
-        for segment_index, segment in enumerate(self.rearr_segments):
-            segment_data = []
-            for action_index, action in enumerate(segment):
-                if action.needs_to_calculate:
-                    logging.debug('Calculating rearrangement segment R{}/{} data, channel {}.'.format(segment_index,len(self.rearr_segments),action_index))
-                    action.set_start_phase(None)
-                    action.calculate()
-                segment_data.append(action.data)
-            segment_data = self.main_window.awg.multiplex(segment_data)
-            segment_data = self.main_window.awg.prepare_segment_data(segment_data)
-            self.rearr_segments_data.append(segment_data)
+        i_seg = 1
+        for start_freq_MHz in self.rearr_segments:
+            try:
+                start_freq_dict = self.rearr_segments_data[start_freq_MHz]
+            except KeyError: # key does not exist yet so make the dict and store it
+                self.rearr_segments_data[start_freq_MHz] = {}
+                start_freq_dict = self.rearr_segments_data[start_freq_MHz]
+            for end_freq_MHz in self.rearr_segments[start_freq_MHz]:
+                segment = self.rearr_segments[start_freq_MHz][end_freq_MHz]
+                segment_data = []
+                for action_index, action in enumerate(segment):
+                    if action.needs_to_calculate:
+                        logging.debug(f'Calculating rearrangement movement {start_freq_MHz} MHz -> {end_freq_MHz} MHz '
+                                      f'({i_seg}/{len(self.rearr_unique_movements)}) data, channel {action_index}.')
+                        # action.set_start_phase(None)
+                        action.calculate()
+                    segment_data.append(np.int16(action.data*(2**15/self.main_window.awg.max_output_mV))) # convert to int16 here to save time later
+                # segment_data = self.main_window.awg.multiplex(segment_data) # can't multiplex here because we need to sum the rearrangement channel first
+                # segment_data = self.main_window.awg.prepare_segment_data(segment_data)
+                i_seg += 1
+                self.rearr_segments_data[start_freq_MHz][end_freq_MHz] = segment_data
+        print(self.rearr_segments_data)
     
     def generate_segment_ids(self):
         """Generates the potential segment ids to index segments.
@@ -261,19 +294,22 @@ class RearrangementHandler():
             uploaded to the AWG card immediately.
     
         """
-        recieved_string = string
-        occupied_traps = sum(int(x) for x in string)
+        # recieved_string = string
+        # occupied_traps = sum(int(x) for x in string)
         
-        if len(string) > len(self.start_freq_MHz):
-            logging.warning('The length of the string recieved is too long '
-                            'for the number of starting traps. Discarding '
-                            'extra bits.')
-            string = string[:len(self.start_freq_MHz)]
-        elif len(string) < len(self.start_freq_MHz):
-            logging.warning('The length of the string recieved is too short '
-                            'for the number of starting traps. Assuming '
-                            'missing bits are unoccupied.')
-            string = string + '0'*(len(self.start_freq_MHz)-len(string))
+        # if len(string) > len(self.start_freq_MHz):
+            # logging.warning('The length of the string recieved is too long '
+            #                 'for the number of starting traps. Discarding '
+            #                 'extra bits.')
+        # string = string[:len(self.start_freq_MHz)] 
+        # if len(string) < len(self.start_freq_MHz):
+            # logging.warning('The length of the string recieved is too short '
+            #                 'for the number of starting traps. Assuming '
+            #                 'missing bits are unoccupied.')
+            # string = string + '0'*(len(self.start_freq_MHz)-len(string))
+
+        # discard any extra bits and add missing bits
+        string = string[:len(self.start_freq_MHz)]+'0'*(len(self.start_freq_MHz)-len(string))
         
         final_string = ''
         for trap in string:
@@ -283,10 +319,10 @@ class RearrangementHandler():
                 final_string += '1'
             else:
                 final_string += trap
-        string = final_string
+        # string = final_string
 
-        logging.debug('Processed recieved string {} as {}'.format(
-                       recieved_string, string))
+        # logging.debug('Processed recieved string {} as {}'.format(
+        #                recieved_string, string))
 
         # if occupied_traps < len(self.target_freq_MHz):
         #     logging.debug('Not enough initial traps loaded for successful '
@@ -304,17 +340,42 @@ class RearrangementHandler():
         #             break
         #     string = string[:i+1] + '0'*(len(self.start_freq_MHz)-(i+1))
 
-        rearr_segment_index = self.occupations.index(string)
+        rearr_segment_index = self.occupations.index(final_string)
 
-        logging.debug('Processed recieved string {} as {} to get '
-                      'rearrangement segment R{}'.format(
-                       recieved_string, string, rearr_segment_index))
+        # logging.debug('Processed recieved string {} as {} to get '
+        #               'rearrangement segment R{}'.format(
+        #                recieved_string, string, rearr_segment_index))
 
-        try:
-            return self.rearr_segments_data[rearr_segment_index]
-        except AttributeError:
-            logging.error('Could not return rearrangement segment data '
-                          'because it has not yet been calculated.')
+        movements = self.rearr_movements[rearr_segment_index]
+
+        # logging.debug(f'Need to perform movements {movements}.')
+
+        rearr_channel_data = []
+        for (start_freq_MHz, end_freq_MHz) in movements:
+            rearr_channel_data.append(self.rearr_segments_data[start_freq_MHz][end_freq_MHz][self.channel])
+        rearr_channel_data = np.add.reduce(rearr_channel_data, dtype=np.int16, axis=0) # faster than np.sum
+
+        if self.main_window.card_settings['active_channels'] > 1:
+            other_channel_data = self.rearr_segments_data[start_freq_MHz][end_freq_MHz][int(not self.channel)] # note here we expect only maximum of 2 channels
+            segment_data = np.empty((rearr_channel_data.size + other_channel_data.size,), dtype=rearr_channel_data.dtype)
+            segment_data[self.channel::2] = rearr_channel_data
+            segment_data[int(not(self.channel))::2] = other_channel_data
+        else:
+            segment_data = rearr_channel_data
+        
+        # logging.debug('Beginning multiplexing and prep')
+        
+        
+        # segment_data = self.main_window.awg.multiplex([rearr_channel_data,other_channel_data]) # can't multiplex here because we need to sum the rearrangement channel first
+        # segment_data = self.main_window.awg.prepare_segment_data(segment_data)
+        # logging.debug('Multiplexing and prep. complete, returning data')
+        return segment_data
+
+        # try:
+        #     return self.rearr_segments_data[rearr_segment_index]
+        # except AttributeError:
+        #     logging.error('Could not return rearrangement segment data '
+        #                   'because it has not yet been calculated.')
     
     def get_occupation_freqs(self):
         """Returns the same information as the occupation array but instead 

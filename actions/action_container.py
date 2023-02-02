@@ -462,9 +462,7 @@ class ActionContainer():
             start_amp_mV = self.amp_adjuster.adjuster(self.freq_params['start_freq_MHz'],self.amp_params['start_amp'])
             self.freq_params['start_phase'] = phase_minimise(self.freq_params['start_freq_MHz'],
                                                              start_amp_mV)
-            self.needs_to_calculate = True
-            self.needs_to_transfer = True
-        elif self.phase_behaviour == 'continue':
+        elif (self.phase_behaviour == 'continue') or (self.phase_behaviour == 'manual'):
             if phase == None:
                 return
             if len(phase) == len(self.freq_params['start_phase']):
@@ -473,8 +471,8 @@ class ActionContainer():
                 self.freq_params['start_phase'] = len(phase) + [0]*(len(self.freq_params['start_phase'])-len(phase))
             else:
                 self.freq_params['start_phase'] = phase[0:len(self.freq_params['start_phase'])]
-            self.needs_to_calculate = True
-            self.needs_to_transfer = True
+        self.needs_to_calculate = True
+        self.needs_to_transfer = True
     
     def get_end_phase(self):
         """Returns the final phase that this action ends on. For this to be 
@@ -547,7 +545,7 @@ class ActionContainer():
         try:
             amp_comp = np.genfromtxt(self.amp_comp_filename, delimiter=',')
             logging.debug('Applying amplitude compensation {}'.format(self.amp_comp_filename))
-        except ValueError as e: # amplitude compensation is None so don't need to apply a correction
+        except Exception as e: # amplitude compensation is None so don't need to apply a correction
             return amp
 
         amp_comp = amp_comp.clip(min=0)
@@ -576,7 +574,7 @@ class ActionContainer():
             `numpy` array containing the frequency of the tone for each 
             timestep contained in the `time` attribute of the action.
         initial_phase : float
-            The initial phase of the frequency tone, in radians.
+            The initial phase of the frequency tone, in degrees.
 
         Returns
         -------

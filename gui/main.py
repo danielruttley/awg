@@ -5,6 +5,7 @@ import sys
 import os
 import numpy as np
 import json
+import time
 from copy import deepcopy
 
 os.system("color")
@@ -364,8 +365,9 @@ class MainWindow(QMainWindow):
         
         self.button_autoplot_condense_rearr = QCheckBox("Condense rearrange segments")
         self.button_autoplot_condense_rearr.setChecked(True)
-        self.button_autoplot_condense_rearr.clicked.connect(self.plot_autoplot_graphs)
-        layout_autoplot_options.addWidget(self.button_autoplot_condense_rearr)
+        self.button_autoplot_condense_rearr.setEnabled(False)
+        # self.button_autoplot_condense_rearr.clicked.connect(self.plot_autoplot_graphs)
+        # layout_autoplot_options.addWidget(self.button_autoplot_condense_rearr) # don't show on GUI because this does nothing anymore
         
         self.button_autoplot_amp_mV = QCheckBox("Show amplitude in mV")
         self.button_autoplot_amp_mV.clicked.connect(self.plot_autoplot_graphs)
@@ -1695,10 +1697,11 @@ class MainWindow(QMainWindow):
         """Populates the autoplotter frequency graph with the steps."""
         if self.button_autoplot.isChecked():
             logging.debug('Beginning Autoplotting...')
-            if not self.button_autoplot_condense_rearr.isChecked():
-                logging.warning('Autoplotting all rearrangemnt steps. This may take some time...')
-            else:
-                logging.debug('Condensing rearrangement segments in Autoplot.')
+            # if not self.button_autoplot_condense_rearr.isChecked():
+            #     logging.warning('Autoplotting all rearrangemnt steps. This may take some time...')
+            # else:
+            #     pass
+            logging.debug('Condensing rearrangement segments in Autoplot.')
             for channel in range(self.card_settings['active_channels']):
                 freq_plot = self.freq_plots[channel]
                 amp_plot = self.amp_plots[channel]
@@ -1723,7 +1726,8 @@ class MainWindow(QMainWindow):
                             color = color_rearr_segment
                             is_rearr_seg = True
                             if not self.button_autoplot_condense_rearr.isChecked():
-                                segments = self.rr.rearr_segments
+                                pass # can no longer plot uncondensed rearrangement segments because data is not stored like this anymore
+                                # segments = self.rr.rearr_segments
                         else:
                             color = color_rearr_other_segment
 

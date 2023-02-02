@@ -404,11 +404,12 @@ class AWG():
             
         """
         # logging.debug('Multiplexing data.')
-        l = len(arrays)
-        c = np.empty((len(arrays[0]) * l,), dtype=arrays[0].dtype)
-        for x in range(l):
-            c[x::l] = arrays[x]
-        return c
+        # l = len(arrays)
+        # c = np.empty((len(arrays[0]) * l,), dtype=arrays[0].dtype)
+        # for x in range(l):
+        #     c[x::l] = arrays[x]
+        # return c
+        return np.ravel(arrays,'F')
         
     def _set_segment(self,segment_index,segment_data):
         """
@@ -519,7 +520,7 @@ class AWG():
             """
             pvBuffer = pvAllocMemPageAligned(qwBufferSize.value) 
             
-            logging.debug("Using buffer allocated by user program")
+            # logging.debug("Using buffer allocated by user program")
         
         # Takes the void pointer to a int16 POINTER type.
         # This only changes the way that the program reads that memory spot.
@@ -534,8 +535,8 @@ class AWG():
 
         if dwError != ERR_OK:
             logging.error('Failed to transfer data to card for segment {}'.format(segment_index))
-        else:
-            logging.debug('{} samples transferred to segment {}.'.format(dwSegmentLenSample,segment_index))
+        # else:
+        #     logging.debug('{} samples transferred to segment {}.'.format(dwSegmentLenSample,segment_index))
         
     def _set_step(self,step_index,segment,number_of_loops,after_step,next_step_index,**kwargs):
         """

@@ -1,6 +1,7 @@
 import logging
 from .client import PyClient
 from .server import PyServer
+import time
 
 class Networker():
     """Handles the PyClient to recieve TCP messages from Dexter before calling 
@@ -95,7 +96,7 @@ class Networker():
         # import time
         # start = time.time()
         msg = msg.replace('#','')
-        logging.info('TCP message recieved: "'+msg+'"')
+        # logging.info('TCP message recieved: "'+msg+'"')
         try:
             split_msg = msg.split('=')
             command = split_msg[0]
@@ -106,9 +107,11 @@ class Networker():
         
         if 'rearrange' in command:
             if all(x in '01' for x in arg):
-                logging.info("Rearrangement string '{}' recieved.".format(arg))
+                # logging.info("Rearrangement string '{}' recieved.".format(arg))
+                start = time.perf_counter()
                 self.main_window.rearr_recieve(arg)
-                # print('time',time.time()-start)
+                end = time.perf_counter()
+                logging.debug(f'processed rearrangement string {arg} in = {(end-start)*1e3:.1f} ms')
             else:
                 logging.error("Invalid rearrangement string '{}' recieved. Message ignored.".format(arg))
                 return
