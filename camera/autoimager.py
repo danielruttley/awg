@@ -10,7 +10,7 @@ configure_path()
 
 from source import TLCameraSDK
 
-def take_image(exposure_ms,roi):
+def take_image(exposure_ms,roi=None):
     with TLCameraSDK() as sdk:
         available_cameras = sdk.discover_available_cameras()
         if len(available_cameras) < 1:
@@ -18,6 +18,7 @@ def take_image(exposure_ms,roi):
 
         with sdk.open_camera(available_cameras[0]) as camera:
             print('connected to camera {}'.format(camera.name))
+            print(f'bit rate = {camera.bit_depth}')
 
             camera.exposure_time_us = int(exposure_ms*1e3) # set exposure to 0.5 ms
             camera.frames_per_trigger_zero_for_unlimited = 0  # start camera in continuous mode
@@ -55,13 +56,12 @@ def take_image(exposure_ms,roi):
                 
             camera.disarm()
             camera.roi = old_roi  # reset the roi back to the original roi
-            return image_buffer_copy.astype('uint16')
+            return (image_buffer_copy*int(2**16/2**camera.bit_depth)).astype('uint16')
 
-save_directory = r"Z:\Tweezer\Experimental Results\2022\August\12\AWG2 array images\\"
+save_directory = r".\camera_image_testing"
 while True:
-    filepath = save_directory+str(time.time())+'.png'
-    array = take_image(20,(197,189,416,820))
-    array = array*int(2**16/2**10)
+    filepath = save_directory+"\\"+str(time.time())+'.png'
+    array = take_image(1)
     PILImage.fromarray(array).save(filepath)
     print('saved image as',filepath)
     time.sleep(10)
