@@ -1,6 +1,7 @@
 # Project specfic
 testing/
 awg/Spectrum code examples
+camera/camera_image_testing
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
