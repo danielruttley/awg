@@ -9,12 +9,13 @@ import json
 
 import itertools
 import time
+from copy import copy
 
 from os import path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from actions import ActionContainer, shared_segment_params
 
-params_to_save = ['start_freq_MHz','target_freq_MHz','channel','segment']
+params_to_save = ['start_freq_MHz','target_freq_MHz','channel','segment','mode']
 
 max_tone_num = 100
 
@@ -71,7 +72,7 @@ class RearrangementHandler():
         None.
 
         """
-
+        self.mode = 'simultaneous' # specified here to maintain compatability with older .awgrr files.
         self.main_window = main_window
         self.load_params(filename)
         
@@ -188,8 +189,48 @@ class RearrangementHandler():
                     actions.append(action)
                 else:
                     actions.append(base_segment[channel])
-                start_freq_dict[end_freq_MHz] = actions
+            start_freq_dict[end_freq_MHz] = actions
+
+        # make an empty action that can be used to pad out extra segments if not needed in sequential rearrangement mode
+        # just use the last defined start_freq_MHz,end_freq_MHz because the freq doesn't matter
+        actions = [] # store the action for all channels
+        for channel in range(self.main_window.card_settings['active_channels']):
+
+            # just make the same empty segment for all channels
+            rearr_action_params = base_segment[channel].get_action_params()
+            freq_params = rearr_action_params['freq']
+            rearr_action_params['amp'] = {'function':'empty','null':[0]}
+
+            for key,value in freq_params.items():
+                if key == 'start_freq_MHz':
+                    freq_params[key] = [start_freq_MHz]
+                elif key == 'end_freq_MHz':
+                    freq_params[key] = [end_freq_MHz]
+                elif key == 'function':
+                    pass
+                else:
+                    freq_params[key] = [freq_params[key][0]] # only want one tone so only keep the first entry in the list
+
+            action = ActionContainer(rearr_action_params,self.main_window.card_settings,self.main_window.amp_adjusters[channel])
+            action.rearr = True
+            action.update_param(param='phase_behaviour',value=['manual'])
+            action.set_start_phase([np.random.random()*360]) # sets phase to random in degrees
+            actions.append(action)
+        self.rearr_segments['empty'] = {}
+        self.rearr_segments['empty']['empty'] = actions # still make dict 2 levels deep so that the rest of the code works
+
         print(self.rearr_segments)
+
+    def get_number_rearrangement_segments_needed(self):
+        """Returns the number of rearrangement segments that the need to be
+        reserved for the RearrangementHandler to dynamically send data to
+        at runtime. If self.mode == 'simultaneous'; this will be 1, otherwise
+        the mode is 'sequential' and the returned number will be equal to the
+        number of target rearrangement sites."""
+        if self.mode == 'simultaneous':
+            return 1
+        else:
+            return len(self.target_freq_MHz)
         
     def calculate_rearr_segment_data(self):
         """Takes the data from the ActionContainers for the rearrangement 
@@ -222,8 +263,15 @@ class RearrangementHandler():
                         # action.set_start_phase(None)
                         action.calculate()
                     segment_data.append(np.int16(action.data*(2**15/self.main_window.awg.max_output_mV))) # convert to int16 here to save time later
-                # segment_data = self.main_window.awg.multiplex(segment_data) # can't multiplex here because we need to sum the rearrangement channel first
-                # segment_data = self.main_window.awg.prepare_segment_data(segment_data)
+                # can't multiplex here because we need to sum the rearrangement channel first
+                if self.mode == 'sequential': # if mode is sequential, we can multiplex here to save time later.
+                    if self.main_window.card_settings['active_channels'] > 1: # note we've assumed max 2 active channels
+                        segment_data_multiplexed = np.empty((segment_data[0].size + segment_data[0].size,), dtype=segment_data[0].dtype)
+                        segment_data_multiplexed[0::2] = segment_data[0]
+                        segment_data_multiplexed[1::2] = segment_data[1]
+                        segment_data = segment_data_multiplexed
+                    else:
+                        segment_data = segment_data[0] # remove from list because we have done the multiplexing (but only 1 channel)
                 i_seg += 1
                 self.rearr_segments_data[start_freq_MHz][end_freq_MHz] = segment_data
         print(self.rearr_segments_data)
@@ -275,9 +323,12 @@ class RearrangementHandler():
         If there are too many occupied traps, the correct id is generated by 
         successively switching bits from the right hand side to unoccupied 
         until the correct number of traps register as occupied.
+
+        Checks are minimal here to make runtime as quick as possible.
         
-        This means that the minimum number of segments are needed to be loaded 
-        onto the card.
+        This means that the minimum number of segment combinations need to be 
+        precalculated, however this gain is minimal now that the segments are
+        summed at runtime.
         
         Parameters
         ----------
@@ -294,19 +345,6 @@ class RearrangementHandler():
             uploaded to the AWG card immediately.
     
         """
-        # recieved_string = string
-        # occupied_traps = sum(int(x) for x in string)
-        
-        # if len(string) > len(self.start_freq_MHz):
-            # logging.warning('The length of the string recieved is too long '
-            #                 'for the number of starting traps. Discarding '
-            #                 'extra bits.')
-        # string = string[:len(self.start_freq_MHz)] 
-        # if len(string) < len(self.start_freq_MHz):
-            # logging.warning('The length of the string recieved is too short '
-            #                 'for the number of starting traps. Assuming '
-            #                 'missing bits are unoccupied.')
-            # string = string + '0'*(len(self.start_freq_MHz)-len(string))
 
         # discard any extra bits and add missing bits
         string = string[:len(self.start_freq_MHz)]+'0'*(len(self.start_freq_MHz)-len(string))
@@ -319,63 +357,38 @@ class RearrangementHandler():
                 final_string += '1'
             else:
                 final_string += trap
-        # string = final_string
 
-        # logging.debug('Processed recieved string {} as {}'.format(
-        #                recieved_string, string))
-
-        # if occupied_traps < len(self.target_freq_MHz):
-        #     logging.debug('Not enough initial traps loaded for successful '
-        #                   'rearrangement. Filling as many traps as possible.')
-        #     for i in range(len(string)):
-        #         string = string[:-(i+1)] + '1'*(i+1)
-        #         if sum([int(x) for x in string]) == len(self.target_freq_MHz):
-        #             break
-        # elif occupied_traps > len(self.target_freq_MHz):
-        #     logging.debug('Rearrangement traps overfilled. Dicarding some.')
-        #     occupied_subtotal = 0
-        #     for i in range(len(string)):
-        #         occupied_subtotal += int(string[i])
-        #         if occupied_subtotal == len(self.target_freq_MHz):
-        #             break
-        #     string = string[:i+1] + '0'*(len(self.start_freq_MHz)-(i+1))
-
+        # get occupation index then retrieve the movements to make based on this index
         rearr_segment_index = self.occupations.index(final_string)
-
-        # logging.debug('Processed recieved string {} as {} to get '
-        #               'rearrangement segment R{}'.format(
-        #                recieved_string, string, rearr_segment_index))
-
         movements = self.rearr_movements[rearr_segment_index]
 
-        # logging.debug(f'Need to perform movements {movements}.')
+        logging.debug(f'Preparing rearrangement movements: {movements}.')
 
+        # prepare data to be sent to the AWG
         rearr_channel_data = []
+        segment_data = []
         for (start_freq_MHz, end_freq_MHz) in movements:
-            rearr_channel_data.append(self.rearr_segments_data[start_freq_MHz][end_freq_MHz][self.channel])
-        rearr_channel_data = np.add.reduce(rearr_channel_data, dtype=np.int16, axis=0) # faster than np.sum
+            if self.mode == 'simultaneous': # data has not yet been multiplexed so need to only get the correct channels data
+                rearr_channel_data.append(self.rearr_segments_data[start_freq_MHz][end_freq_MHz][self.channel])
+            else: # data has already been multiplexed so don't need to pick based on channel
+                segment_data.append(self.rearr_segments_data[start_freq_MHz][end_freq_MHz])
 
-        if self.main_window.card_settings['active_channels'] > 1:
-            other_channel_data = self.rearr_segments_data[start_freq_MHz][end_freq_MHz][int(not self.channel)] # note here we expect only maximum of 2 channels
-            segment_data = np.empty((rearr_channel_data.size + other_channel_data.size,), dtype=rearr_channel_data.dtype)
-            segment_data[self.channel::2] = rearr_channel_data
-            segment_data[int(not(self.channel))::2] = other_channel_data
-        else:
-            segment_data = rearr_channel_data
-        
-        # logging.debug('Beginning multiplexing and prep')
-        
-        
-        # segment_data = self.main_window.awg.multiplex([rearr_channel_data,other_channel_data]) # can't multiplex here because we need to sum the rearrangement channel first
-        # segment_data = self.main_window.awg.prepare_segment_data(segment_data)
-        # logging.debug('Multiplexing and prep. complete, returning data')
-        return segment_data
+        if self.mode == 'simultaneous': # all data should be in 1 segment so needs to be summed. It will also not have yet been multiplexed
+            rearr_channel_data = np.add.reduce(rearr_channel_data, dtype=np.int16, axis=0) # faster than np.sum
 
-        # try:
-        #     return self.rearr_segments_data[rearr_segment_index]
-        # except AttributeError:
-        #     logging.error('Could not return rearrangement segment data '
-        #                   'because it has not yet been calculated.')
+            if self.main_window.card_settings['active_channels'] > 1:
+                other_channel_data = self.rearr_segments_data[start_freq_MHz][end_freq_MHz][int(not self.channel)] # note here we expect only maximum of 2 channels
+                segment_data = np.empty((rearr_channel_data.size + other_channel_data.size,), dtype=rearr_channel_data.dtype)
+                segment_data[self.channel::2] = rearr_channel_data
+                segment_data[int(not(self.channel))::2] = other_channel_data
+            else:
+                segment_data = rearr_channel_data
+            return [segment_data] # returns as a list containing a single value
+
+        else: # mode is sequential so return a list of segments to be sent to the AWG. Data will have already been mutliplexed when calculated.
+            while len(segment_data) < self.get_number_rearrangement_segments_needed():
+                segment_data.append(self.rearr_segments_data['empty']['empty'])
+            return segment_data
     
     def get_occupation_freqs(self):
         """Returns the same information as the occupation array but instead 
@@ -455,7 +468,10 @@ class RearrangementHandler():
             data = json.load(f)
 
         for param in params_to_save:
-            setattr(self,param,data[param])
+            try:
+                setattr(self,param,data[param])
+            except KeyError: # allow older param files which didn't specify mode to skip this
+                pass
 
         if len(self.target_freq_MHz) > len(self.start_freq_MHz):
             logging.warning('target_freq_MHz was longer than start_freq_MHz. Discarding '

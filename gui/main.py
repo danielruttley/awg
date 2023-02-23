@@ -921,20 +921,31 @@ class MainWindow(QMainWindow):
         try:
             if self.button_rearr.isChecked():
                 logging.debug('Activating rearrangement.')
-                self.segments[0:0] = self.rr.base_segments 
+                len_before = len(self.segments)
+                self.segments[0:0] = self.rr.base_segments
+                for _ in range(self.rr.get_number_rearrangement_segments_needed()-1): # if needed copy the rearrangement segment multiple times
+                    self.segments.insert(self.rr.segment+1,self.rr.base_segments[self.rr.segment])
+                segments_added =len(self.segments) -  len_before
+                print('segments added =',segments_added)
+                print('steps before',self.steps)
                 for step in self.steps:
-                    step['segment'] += len(self.rr.base_segments)
-                self.button_rearr.setText('Rearrangement ON')
+                    step['segment'] += segments_added #len(self.rr.base_segments) + (self.rr.get_number_rearrangement_segments_needed()-1)
+                print('steps after',self.steps)
+                self.button_rearr.setText(f'Rearrangement ON ({self.rr.mode})')
                 self.button_rearr.setStyleSheet('background-color: '+color_rearr_on)
             else:
                 logging.debug('Deactivating rearrangement.')
                 segments_removed = 0
-                for seg in self.rr.base_segments:
-                    try:
-                        self.segments.remove(seg)
-                        segments_removed += 1
-                    except ValueError:
-                        pass
+                len_before = len(self.segments)
+                self.segments = [x for x in self.segments if x not in self.rr.base_segments]
+                # for seg in self.rr.base_segments:
+                #     try:
+                #         self.segments.remove(seg)
+                #         segments_removed += 1
+                #     except ValueError:
+                #         pass
+                segments_removed = len_before - len(self.segments)
+                print('segments removed =',segments_removed)
                 self.steps = [x for x in self.steps if x['segment'] >= segments_removed]
                 for step in self.steps:
                     step['segment'] -= segments_removed
@@ -976,8 +987,10 @@ class MainWindow(QMainWindow):
                           'mode is not active. Ignoring.')
             return
         
-        segment_data = self.rr.accept_string(string)
-        self.awg.transfer_segment_data(self.rr.segment,segment_data)
+        segment_data = self.rr.accept_string(string) # segments data is returned as a list in case simultaneous rearrangements needed
+        logging.debug(f'Recieved {len(segment_data)} segments, uploading to segments {self.rr.segment} - {self.rr.segment+len(segment_data)-1}.')
+        for data_i, data in segment_data:
+            self.awg.transfer_segment_data(self.rr.segment+data_i,data)
             
     def data_recieve(self,data_list):
         """Accepts data recieved from PyDex over TCP from the Networker to 

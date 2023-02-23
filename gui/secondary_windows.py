@@ -433,7 +433,7 @@ class RearrSettingsWindow(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        settings = ['start_freq_MHz','target_freq_MHz','channel','segment']
+        settings = ['start_freq_MHz','target_freq_MHz','channel','segment','mode']
 
         self.layout_rearr_settings = QFormLayout()
         for key in settings:
@@ -441,6 +441,10 @@ class RearrSettingsWindow(QWidget):
             if key == 'channel':
                 widget = QComboBox()
                 widget.addItems([str(x) for x in list(range(self.mainWindow.card_settings['active_channels']))])
+                widget.setCurrentText(str(value))
+            elif key == 'mode':
+                widget = QComboBox()
+                widget.addItems(['simultaneous','sequential'])
                 widget.setCurrentText(str(value))
             else:
                 widget = QLineEdit()
@@ -461,6 +465,8 @@ class RearrSettingsWindow(QWidget):
             widget = self.layout_rearr_settings.itemAt(row,1).widget()
             if key == 'channel':
                 value = int(widget.currentText())
+            elif key == 'mode':
+                value = widget.currentText()
             elif 'freq' in key:
                 try:
                     value = convert_str_to_list(widget.text())

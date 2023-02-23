@@ -834,6 +834,21 @@ class ActionContainer():
             _time = self.time
         return mod_amp*np.sin(2*np.pi*mod_freq_kHz*1e3*_time)+start_amp
     
+    def amp_empty(self,null,_time=None):
+        """Returns an empty array. Used to pad out unneeded rearrangment 
+        segments when using sequential mode.
+
+        Parameters
+        ----------
+        null : Whatever you like.
+            This doesn't do anything, it's just to have some arguement for the 
+            function so that the number of parameters can still be normalised.
+        
+        """
+        if _time is None:
+            _time = self.time
+        return np.zeros_like(_time)
+    
 if __name__ == '__main__':
     card_settings = {'active_channels':1,
                      'sample_rate_Hz':625000000,
