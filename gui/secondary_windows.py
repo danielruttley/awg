@@ -565,7 +565,15 @@ class AmpAdjusterSettingsChannelWidget(QWidget):
         
         self.form_layout = QFormLayout()
         
-        for key in ['freq_limit_1_MHz','freq_limit_2_MHz','amp_limit_1','amp_limit_2','non_adjusted_amp_mV']:
+        for key in ['non_adjusted_amp_mV']:
+            widget = QLineEdit()
+            widget.setText(str(self.settings[key]))
+            widget.setValidator(QDoubleValidator())
+            self.form_layout.addRow(key, widget)
+
+        self.form_layout.addRow('Legacy parameters (not used with .awgde files):',None)
+
+        for key in ['freq_limit_1_MHz','freq_limit_2_MHz','amp_limit_1','amp_limit_2']:
             widget = QLineEdit()
             widget.setText(str(self.settings[key]))
             widget.setValidator(QDoubleValidator())
@@ -573,7 +581,7 @@ class AmpAdjusterSettingsChannelWidget(QWidget):
         layout.addLayout(self.form_layout,2,0,1,6)
     
     def open_calibration_browse_window(self):
-        filename = QFileDialog.getOpenFileName(self, 'Load channel {} AmpAdjust calibration'.format(self.channel),'.',"Text documents (*.txt)")[0]
+        filename = QFileDialog.getOpenFileName(self, 'Load channel {} AmpAdjust calibration'.format(self.channel),'.',"AWG DE calibration (*.awgde);;Text documents (*.txt)")[0]
         if filename != '':
             self.label_filename.setText(filename)
     
