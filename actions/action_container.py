@@ -727,6 +727,7 @@ class ActionContainer():
                    start_phase=0,_time=None):
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we want the time to start from zero
         if hybridicity == 1:
             return np.linspace(start_freq_MHz,end_freq_MHz,len(_time))
         elif hybridicity == 0:
@@ -759,10 +760,33 @@ class ActionContainer():
                 freq3 = []
             
             return np.asarray(freq1+freq2+freq3)
-            
+    
+    def freq_sweep_with_waits(self,start_freq_MHz=100,end_freq_MHz=101,hybridicity=1,
+                              start_phase=0,sweep_frac=0.5,_time=None):
+        if _time is None:
+            _time = self.time
+        _time -= _time[0] # we want the time to start from zero
+
+        sweep_start_index = int(len(_time)*(0.5-sweep_frac/2))
+        sweep_end_index = int(len(_time)*(0.5+sweep_frac/2))
+
+        wait_1_time = _time[:sweep_start_index]
+        sweep_time = _time[sweep_start_index:sweep_end_index]
+        wait_2_time = _time[sweep_end_index:]
+
+        wait_1 = self.freq_static(start_freq_MHz,_time=wait_1_time)
+        middle = self.freq_sweep(start_freq_MHz=start_freq_MHz,
+                                 end_freq_MHz=end_freq_MHz,
+                                 hybridicity=hybridicity,
+                                 _time=sweep_time)
+        wait_2 = self.freq_static(end_freq_MHz,_time=wait_2_time)
+
+        return np.concatenate([wait_1,middle,wait_2])
+
     def freq_min_jerk(self,start_freq_MHz=100,end_freq_MHz=101,start_phase=0,_time=None,_T=None):
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we want the time to start from zero
         d = (end_freq_MHz-start_freq_MHz)
         if _T == None:
             _T = _time[-1] - _time[0]
@@ -772,6 +796,7 @@ class ActionContainer():
                          start_phase=0,noise_width_MHz=10,_time=None):
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we want the time to start from zero
         freq = self.freq_sweep(start_freq_MHz,end_freq_MHz,
                                 hybridicity,start_phase,_time)
         freq += np.random.uniform(low=-noise_width_MHz/2, high=noise_width_MHz/2, size=(len(freq)))
@@ -781,6 +806,7 @@ class ActionContainer():
                         start_phase=0,dither_amp_MHz=10,dither_freq_MHz=1,_time=None):
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we want the time to start from zero
         freq = self.freq_sweep(start_freq_MHz,end_freq_MHz,
                                 hybridicity,start_phase,_time)
         freq += dither_amp_MHz*np.sin(2*np.pi*_time*dither_freq_MHz*1e6)
@@ -794,11 +820,13 @@ class ActionContainer():
     def amp_ramp(self,start_amp=1,end_amp=0,_time=None):
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we don't care about the actual time, just want an increasing array
         return np.linspace(start_amp,end_amp,len(_time))
     
     def amp_drop(self,start_amp=1,drop_amp=0,drop_time_us=100,_time=None):
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we want the time to start from zero
         amp = np.ones_like(_time)*start_amp
         duration = _time[-1]
         drop_idx = np.where(np.abs(_time-duration/2)<((drop_time_us*1e-6)/2))
@@ -817,6 +845,7 @@ class ActionContainer():
             return self.amp_ramp(start_amp,end_amp,_time)
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we don't care about the actual time, just want an increasing array
         if index > 0:
             return np.flip((index**(_time/_time[-1])-1)/(index-1)*(start_amp-end_amp) + end_amp)
         else:
@@ -832,8 +861,38 @@ class ActionContainer():
         """
         if _time is None:
             _time = self.time
+        _time -= _time[0] # we want the time to start from zero
         return mod_amp*np.sin(2*np.pi*mod_freq_kHz*1e3*_time)+start_amp
     
+    def amp_two_approx_exp(self,start_amp=0,middle_amp=1,end_amp=0,
+                           index_1=-20,index_2=20,frac_1=0.25,frac_2=0.25,
+                           _time=None):
+        """Returns an empty array. Used to pad out unneeded rearrangment 
+        segments when using sequential mode.
+
+        Parameters
+        ----------
+        null : Whatever you like.
+            This doesn't do anything, it's just to have some arguement for the 
+            function so that the number of parameters can still be normalised.
+        
+        """
+        if _time is None:
+            _time = self.time
+        _time -= _time[0] # we want the time to start from zero
+        ramp_1_end_index = int(len(_time)*frac_1)
+        ramp_2_start_index = int(len(_time)*(1-frac_2))
+        
+        ramp_1_time = _time[:ramp_1_end_index]
+        middle_time = _time[ramp_1_end_index:ramp_2_start_index]
+        ramp_2_time = _time[ramp_2_start_index:]
+
+        ramp_1 = self.amp_approx_exp(start_amp,middle_amp,index_1,ramp_1_time)
+        middle = self.amp_static(middle_amp,middle_time)
+        ramp_2 = self.amp_approx_exp(middle_amp,end_amp,index_2,ramp_2_time)
+
+        return np.concatenate([ramp_1,middle,ramp_2])
+
     def amp_empty(self,null,_time=None):
         """Returns an empty array. Used to pad out unneeded rearrangment 
         segments when using sequential mode.
