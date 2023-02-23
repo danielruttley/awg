@@ -1064,6 +1064,46 @@ class MainWindow(QMainWindow):
         
         #TODO: uncomment the below line to send to the AWG when recieving.
         self.calculate_send()
+
+    def multi_segment_data_recieve(self,data_template,segments):
+        """Accepts data recieved from PyDex over TCP from the Networker to 
+        update the data of a single tone in a given action for multiple 
+        segments.
+        
+        Parameters
+        ----------
+        data : list of list
+            The data to update segments with. Each entry in this list is 
+            itself a list that contains the following parameters (in order):
+                
+                
+        channel : int
+            The channel to change the data of.
+        segment : int
+            The segment to change the data of.
+        param : str
+            The function kwarg to change.
+        value : float
+            The value to change the arguement to.
+        tone_index : int
+            The index of the tone to change. This should be a non-negative 
+            integer if only one tone should be changed. If a negative integer 
+            is supplied, all tones will be changed to the given value.
+
+        segments : list of int
+            Segments to apply the data_template to.
+            
+        Returns
+        -------
+        None.
+        
+        """
+        data = []
+        for segment in segments:
+            seg_data = deepcopy(data_template)
+            seg_data[1] = segment
+            data.append(seg_data)
+        self.data_recieve(data)
         
     def complete_data_recieve(self,data_list):
         """Accepts a complete values list for a parameter of an action.

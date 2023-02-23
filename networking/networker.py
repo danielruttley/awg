@@ -1,3 +1,4 @@
+import numpy as np
 import logging
 from .client import PyClient
 from .server import PyServer
@@ -95,8 +96,10 @@ class Networker():
         """
         # import time
         # start = time.time()
+        
+        logging.info('TCP message recieved: "'+msg+'"')
         msg = msg.replace('#','')
-        # logging.info('TCP message recieved: "'+msg+'"')
+        print('message length = ',len(msg))
         try:
             split_msg = msg.split('=')
             command = split_msg[0]
@@ -124,6 +127,21 @@ class Networker():
             except SyntaxError:
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
             self.server.priority_messages([[1,'go'*1000]])
+        elif 'set_multi_segment_data' in command:
+            try:
+                arg = eval(arg)
+                evaled_arg = []
+                for a in arg:
+                    try: # eval args again to allow shorter TCP messages to be sent (see 21/02/23 LabBook)
+                        evaled_arg.append(eval(a))
+                    except TypeError: # arg does not need to be evaled
+                        evaled_arg.append(a)
+                self.main_window.multi_segment_data_recieve(*evaled_arg)
+            except NameError:
+                logging.error("NameError in data string '{}' (the param name must be contained in ''). Message ignored.".format(arg))
+            except SyntaxError:
+                logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
+            self.server.priority_messages([[1,'go'*1000]])
         elif 'set_complete_data' in command:
             try:
                 arg = eval(arg)
@@ -134,12 +152,12 @@ class Networker():
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
             self.server.priority_messages([[1,'go'*1000]])
         elif 'load' in command:
-            filename_stripped = arg.split('.')[0]
+            filename_stripped = arg.rsplit('.',1)[0]
             self.main_window.load_params(filename_stripped+'.awg')
             # self.main_window.load_rearr_params(filename_stripped+'.awgrr')
             self.main_window.calculate_send()
         elif 'save' in command:
-            filename_stripped = arg.split('.')[0]
+            filename_stripped = arg.rsplit('.',1)[0]
             self.main_window.save_params(filename_stripped+'.awg')
             self.main_window.rr.save_params(filename_stripped+'.awgrr')
         elif 'trigger' in command:
@@ -153,6 +171,8 @@ class Networker():
             else:
                 logging.error("Invalid rearrangement string '{}' recieved. Message ignored.".format(arg))
                 return
+        elif 'clear_response_queue' in command:
+            self.server.clear_queue()
         else:
             logging.error("Command '{}' not recognised. Ignoring TCP message.".format(command))
             return
