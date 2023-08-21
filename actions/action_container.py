@@ -5,8 +5,6 @@ import numpy as np
 from copy import copy, deepcopy
 from scipy.interpolate import interp1d
 
-import matplotlib.pyplot as plt
-
 from .phase_minimiser import phase_minimise
 
 from os import path
