@@ -6,7 +6,7 @@ df = pd.read_csv('trap_df.csv',index_col=0)
 
 print(df.keys())
 
-iterations = 5
+iterations = 10
 
 for i in range(iterations):
     try:
@@ -27,7 +27,8 @@ plt.show()
 foms = []
 for i in range(iterations):
     try:
-        plt.scatter(i,(df['multi_{}_I0'.format(i)]-df['multi_0_I0'].mean()).abs().sum()/df['multi_0_I0'].mean()/len(df),c='C{}'.format(i))
+        # plt.scatter(i,(df['multi_{}_I0'.format(i)]-df['multi_0_I0'].mean()).abs().sum()/df['multi_0_I0'].mean()/len(df),c='C{}'.format(i))
+        plt.scatter(i,(df[f'multi_{i}_I0']-df[f'multi_{i}_I0'].mean()).abs().sum()/df['multi_0_I0'].mean()/len(df),c='C{}'.format(i))
     except KeyError:
         pass
 plt.xticks(list(range(iterations)))
@@ -35,11 +36,21 @@ plt.xlabel('iteration')
 plt.ylabel('figure of merit')
 plt.show()
 
-plt.scatter(df['freq_MHz'],df['start_amp_9'],c='C9')
-plt.plot(df['freq_MHz'],df['start_amp_9'],c='C9')
-plt.axhline(df['start_amp_9'].mean(),c='C9',linestyle='--')
+plt.plot(df['freq_MHz'],df['single_x0'],'-o')
 plt.xlabel('frequency (MHz)')
-plt.ylabel('corrected start_amp_9',color='C9')
+plt.ylabel('single_x0')
+plt.show()
+
+plt.plot(df['freq_MHz'],df['single_y0'],'-o')
+plt.xlabel('frequency (MHz)')
+plt.ylabel('single_y0',color='C9')
+plt.show()
+
+plt.scatter(df['freq_MHz'],df['start_amp_4'],c='C9')
+plt.plot(df['freq_MHz'],df['start_amp_4'],c='C9')
+plt.axhline(df['start_amp_4'].mean(),c='C9',linestyle='--')
+plt.xlabel('frequency (MHz)')
+plt.ylabel('corrected start_amp_4',color='C9')
 
 ax2 = plt.gca().twinx()
 # make a plot with different y-axis using second axis object
@@ -49,6 +60,5 @@ ax2.axhline(df['multi_0_I0'].mean(),c='C0',linestyle='--')
 ax2.set_ylabel("uncorrected intensity (arb.)",color="C0")
 plt.show()
 
-plt.scatter(df['freq_MHz'],np.log10(df['start_amp_3']/df['start_amp_0'])/np.log10(df['multi_0_I0']/df['multi_0_I0'].mean()),c='C3')
-
-plt.show()
+# plt.scatter(df['freq_MHz'],np.log10(df['start_amp_3']/df['start_amp_0'])/np.log10(df['multi_0_I0']/df['multi_0_I0'].mean()),c='C3')
+# plt.show()

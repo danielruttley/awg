@@ -110,6 +110,7 @@ class RearrangementHandler():
                     except KeyError:
                         channel_params = {**channel_params,**segment_params['Ch0']} #will fall back on Ch0 if there are not enough channels in rr params
                     action = ActionContainer(channel_params,self.main_window.card_settings,self.main_window.amp_adjusters[channel])
+                    action.rearr = True
                     segment.append(action)
                 self.base_segments.append(segment)
         

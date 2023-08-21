@@ -603,18 +603,21 @@ class AmpAdjusterSettingsChannelWidget(QWidget):
         settings['enabled'] = self.button_enabled.isChecked()
         settings['filename'] = self.label_filename.text()
         
-        for row in range(self.form_layout.rowCount()):
-            key = self.form_layout.itemAt(row,0).widget().text()
-            widget = self.form_layout.itemAt(row,1).widget()
-            value = widget.text()
-            try:
-                value = float(value)
-            except Exception:
-                logging.error('Failed to evaluate {} for channel {} AmpAdjuster parameter {}'.format(value,self.channel,key))
-                widget.setStyleSheet('background-color: red')
-                success = False
-            else:
-                widget.setStyleSheet('')
-                settings[key] = value
+        try:
+            for row in range(self.form_layout.rowCount()):
+                key = self.form_layout.itemAt(row,0).widget().text()
+                widget = self.form_layout.itemAt(row,1).widget()
+                value = widget.text()
+                try:
+                    value = float(value)
+                except Exception:
+                    logging.error('Failed to evaluate {} for channel {} AmpAdjuster parameter {}'.format(value,self.channel,key))
+                    widget.setStyleSheet('background-color: red')
+                    success = False
+                else:
+                    widget.setStyleSheet('')
+                    settings[key] = value
+        except AttributeError: # ignore rows where no widget exists (e.g. label)
+            pass 
 
         return success, settings        

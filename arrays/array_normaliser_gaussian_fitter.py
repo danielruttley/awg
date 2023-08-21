@@ -133,7 +133,7 @@ class ArrayNormaliser():
         logging.info('Getting single trap coordinates.')
         for i,freq in enumerate(self.start_freq_MHz):
             self.set_freq([freq],[1/len(self.start_freq_MHz)])
-            time.sleep(1)
+            time.sleep(5)
             
             array = self.take_image()
             print(np.max(array))
@@ -150,10 +150,10 @@ class ArrayNormaliser():
             y0 = cent_ind[0]
             wx = self.trap_waist_guess
             
-            xmin = max(round(x0-1.5*wx),0)
-            xmax = min(round(x0+1.5*wx),array.shape[1])
-            ymin = max(round(y0-1.5*wx),0)
-            ymax = min(round(y0+1.5*wx),array.shape[0])
+            xmin = max(round(x0-1.5*np.abs(wx)),0)
+            xmax = min(round(x0+1.5*np.abs(wx)),array.shape[1])
+            ymin = max(round(y0-1.5*np.abs(wx)),0)
+            ymax = min(round(y0+1.5*np.abs(wx)),array.shape[0])
             print(xmin,ymin,xmax,ymax)
             roi = array[ymin:ymax,xmin:xmax]
             print('array_max',np.max(array))
@@ -199,10 +199,10 @@ class ArrayNormaliser():
             wy = row['single_wy']
             theta = row['single_theta']
             print(x0,y0)
-            xmin = max(round(x0-1.5*wx),0)
-            xmax = min(round(x0+1.5*wx),array.shape[1])
-            ymin = max(round(y0-1.5*wx),0)
-            ymax = min(round(y0+1.5*wx),array.shape[0])
+            xmin = max(round(x0-1.5*np.abs(wx)),0)
+            xmax = min(round(x0+1.5*np.abs(wx)),array.shape[1])
+            ymin = max(round(y0-1.5*np.abs(wx)),0)
+            ymax = min(round(y0+1.5*np.abs(wx)),array.shape[0])
             print(xmin,ymin,xmax,ymax)
             roi = array[ymin:ymax,xmin:xmax]
             print('array_max',np.max(array))
@@ -283,13 +283,14 @@ class ArrayNormaliser():
 if __name__ == '__main__':
     name = 'AWG2'
     port = 8740
-    start_freq_MHz = [106,104,102,100,98,96,94,92]
-    start_amp = [0.2]*len(start_freq_MHz)
+    start_freq_MHz = [107.595, 105.545, 103.496, 101.446, 99.396, 97.346, 95.297, 93.247]
+
+    start_amp = [0.12]*len(start_freq_MHz)#[1.5/len(start_freq_MHz)]*len(start_freq_MHz)
     # start_amp = None
-    iterations = 5
+    iterations = 10
     channel = 0
-    exposure_ms = 20
-    roi = (197,189,416,900)
+    exposure_ms = 1# 0.1
+    roi = (883,550,1192,653)
     scale_index = 0.3
     distance_between_traps = 10
     

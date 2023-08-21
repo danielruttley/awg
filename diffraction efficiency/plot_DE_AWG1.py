@@ -28,11 +28,11 @@ for file_name in DAQ_file_names:
     file_path = os.path.join(DAQ_file_dir, file_name)
     DAQ_df = pd.read_csv(file_path,skiprows=2)
     
-    # plt.figure()
-    # plt.title(file_name)
-    # plt.plot(DAQ_df['# Time (s)'],DAQ_df[DAQ_channel])
-    # plt.xlim(0,0.110)
-    # plt.ylim(0,4.2)
+    plt.figure()
+    plt.title(file_name)
+    plt.plot(DAQ_df['# Time (s)'],DAQ_df[DAQ_channel])
+    plt.xlim(0,0.110)
+    plt.ylim(0,4.2)
     
     
     start_cutoff_voltage = 3
@@ -44,12 +44,12 @@ for file_name in DAQ_file_names:
     time = start_time + buffer_time
     
     calibration_voltage = DAQ_df[(DAQ_df['# Time (s)'] > time) & (DAQ_df['# Time (s)'] < time+segment_time-2*buffer_time)][DAQ_channel].mean()
-    # plt.scatter([time],[calibration_voltage],c='C2')
+    plt.scatter([time],[calibration_voltage],c='C2')
     time += segment_time*2
     
     for freq in freqs_df['frequency (MHz)']:
         amplitude = DAQ_df[(DAQ_df['# Time (s)'] > time) & (DAQ_df['# Time (s)'] < time+segment_time-2*buffer_time)][DAQ_channel].mean()
-        # plt.scatter([time],[amplitude],c='C1')
+        plt.scatter([time],[amplitude],c='C1')
         amplitudes.append(amplitude)
         time += segment_time*2
         
@@ -57,7 +57,7 @@ for file_name in DAQ_file_names:
         
     # freqs_df[f'{amp_mV} mV'] = amplitudes
     freqs_df[amp_mV] = amplitudes
-    # plt.show()
+    plt.show()
 
 freqs_df.sort_values(by=['frequency (MHz)'],inplace=True)
 freqs_df = freqs_df.set_index('frequency (MHz)')

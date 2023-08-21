@@ -925,7 +925,7 @@ class MainWindow(QMainWindow):
                 self.segments[0:0] = self.rr.base_segments
                 for _ in range(self.rr.get_number_rearrangement_segments_needed()-1): # if needed copy the rearrangement segment multiple times
                     self.segments.insert(self.rr.segment+1,self.rr.base_segments[self.rr.segment])
-                segments_added =len(self.segments) -  len_before
+                segments_added = len(self.segments) -  len_before
                 print('segments added =',segments_added)
                 print('steps before',self.steps)
                 for step in self.steps:
@@ -951,7 +951,9 @@ class MainWindow(QMainWindow):
                     step['segment'] -= segments_removed
                 self.button_rearr.setText('Rearrangement OFF')
                 self.button_rearr.setStyleSheet('background-color: '+color_rearr_off)
-            print(self.steps)
+            for segment in self.segments:
+                for action in segment:
+                    action.needs_to_transfer = True
             self.segment_list_update()
         except AttributeError:
             logging.debug('Could not toggle rearrangement because the '
@@ -989,7 +991,7 @@ class MainWindow(QMainWindow):
         
         segment_data = self.rr.accept_string(string) # segments data is returned as a list in case simultaneous rearrangements needed
         logging.debug(f'Recieved {len(segment_data)} segments, uploading to segments {self.rr.segment} - {self.rr.segment+len(segment_data)-1}.')
-        for data_i, data in segment_data:
+        for data_i, data in enumerate(segment_data):
             self.awg.transfer_segment_data(self.rr.segment+data_i,data)
             
     def data_recieve(self,data_list):
@@ -1707,7 +1709,7 @@ class MainWindow(QMainWindow):
                 found_existing_step = False
                 try:
                     if segment in self.rr.base_segments:
-                        if (i == self.rr.segment-1) or (i == len(self.rr.base_segments)-1):
+                        if (i == self.rr.segment-1) or (i == len(self.rr.base_segments)+(self.rr.get_number_rearrangement_segments_needed()-1)-1):
                             new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'loop_until_trigger','rearr' : True})
                         else:
                             new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'continue','rearr' : True})

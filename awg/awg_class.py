@@ -342,7 +342,8 @@ class AWG():
         
         for segment_index,segment in enumerate(segments):
             segment_data = []
-            if any([action.needs_to_transfer for action in segment]):
+            if (any([action.needs_to_transfer for action in segment]) | 
+                any([action.rearr for action in segment])):
                 if segment_index == current_segment:
                     logging.warning('The currently playing segment {} '
                                     'needs to transfer. The card will '
@@ -535,8 +536,9 @@ class AWG():
 
         if dwError != ERR_OK:
             logging.error('Failed to transfer data to card for segment {}'.format(segment_index))
-        # else:
-        #     logging.debug('{} samples transferred to segment {}.'.format(dwSegmentLenSample,segment_index))
+        else:
+            logging.debug('{} samples transferred to segment {}.'.format(dwSegmentLenSample,segment_index))
+            # print(segment_data)
         
     def _set_step(self,step_index,segment,number_of_loops,after_step,next_step_index,**kwargs):
         """

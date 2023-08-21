@@ -1,30 +1,30 @@
 {
     "card_settings": {
-        "active_channels": 1,
+        "active_channels": 2,
         "sample_rate_Hz": 625000000,
-        "max_output_mV": 282,
+        "max_output_mV": 282.0,
         "number_of_segments": 64,
         "segment_min_samples": 192,
         "segment_step_samples": 32
     },
     "amp_adjuster_settings": [
         {
-            "enabled": true,
+            "enabled": false,
             "filename": "Z:/Tweezer/Code/Python 3.9/awg/diffraction efficiency/AWG1_calibration_22_02_2023_90MHz_255MHz.awgde",
             "freq_limit_1_MHz": 135.0,
             "freq_limit_2_MHz": 195.0,
             "amp_limit_1": 0.0,
             "amp_limit_2": 1.0,
-            "non_adjusted_amp_mV": 100.0
+            "non_adjusted_amp_mV": 1.0
         },
         {
-            "enabled": true,
+            "enabled": false,
             "filename": "Z:/Tweezer/Code/Python 3.9/awg/diffraction efficiency/AWG1_calibration_22_02_2023_90MHz_255MHz.awgde",
             "freq_limit_1_MHz": 135.0,
             "freq_limit_2_MHz": 195.0,
             "amp_limit_1": 0.0,
             "amp_limit_2": 1.0,
-            "non_adjusted_amp_mV": 100.0
+            "non_adjusted_amp_mV": 1.0
         }
     ],
     "datagen_settings": {
@@ -36,13 +36,13 @@
     },
     "segments": [
         {
-            "duration_ms": 0.0050176,
-            "phase_behaviour": "optimise",
+            "duration_ms": 0.9999872,
+            "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
                     "function": "static",
                     "start_freq_MHz": [
-                        160
+                        100
                     ],
                     "start_phase": [
                         0
@@ -52,6 +52,23 @@
                     "function": "static",
                     "start_amp": [
                         0
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        0
+                    ],
+                    "start_phase": [
+                        90
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        100
                     ]
                 }
             }

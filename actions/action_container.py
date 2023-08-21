@@ -712,7 +712,9 @@ class ActionContainer():
     will not show up in the GUI but allows smaller subsets of the action to be
     calculated rather than the entire action (e.g. when autoplotting).
     
-    _time should be provided in units of seconds.
+    _time should be provided in units of seconds. Time is renormalised 
+    so that it starts from zero for most segment types (a copy of the 
+    array is generated to not modify the original).
 
     Global params (e.g. duration, sample rate, etc. should be passed as
     class attributes rather than function arguements.)
@@ -727,7 +729,7 @@ class ActionContainer():
                    start_phase=0,_time=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
         if hybridicity == 1:
             return np.linspace(start_freq_MHz,end_freq_MHz,len(_time))
         elif hybridicity == 0:
@@ -743,29 +745,42 @@ class ActionContainer():
             time1 = _time[:time_cutoff]
             time2 = _time[time_cutoff:len(_time)-time_cutoff]
             time3 = _time[len(_time)-time_cutoff:]
-            
+
             try:
-                freq1 = list(self.freq_min_jerk(start_freq_MHz,start_freq_MHz+2*deltaf,0,time1,2*deltat))
+                freq1 = self.freq_min_jerk(start_freq_MHz,start_freq_MHz+2*deltaf,0,time1,2*deltat)
             except IndexError:
                 freq1 = []
-                
             try:
-                freq2 = list(15/4*deltaf/2/deltat*(time2-time2[0])+(start_freq_MHz+deltaf))
+                freq3 = self.freq_min_jerk(end_freq_MHz-2*deltaf,end_freq_MHz,0,time3-_time[-1]+2*deltat,2*deltat)
+            except IndexError:
+                freq3 = []
+
+            try:
+                linear_start_freq_MHz = freq1[-1]
+                linear_start_time = time1[-1]
+            except IndexError:
+                linear_start_freq_MHz = start_freq_MHz
+                linear_start_time = _time[0]
+
+            try:
+                linear_end_freq_MHz = freq3[0]
+                linear_end_time = time3[0]
+            except IndexError:
+                linear_end_freq_MHz = end_freq_MHz
+                linear_end_time = _time[-1]
+
+            try:
+                freq2 = linear_start_freq_MHz + (time2-linear_start_time)/(linear_end_time-linear_start_time)*(linear_end_freq_MHz-linear_start_freq_MHz)
             except IndexError:
                 freq2 = []
             
-            try:
-                freq3 = list(self.freq_min_jerk(end_freq_MHz-2*deltaf,end_freq_MHz,0,time3-_time[-1]+2*deltat,2*deltat))
-            except IndexError:
-                freq3 = []
-            
-            return np.asarray(freq1+freq2+freq3)
+            return np.concatenate([freq1,freq2,freq3])
     
     def freq_sweep_with_waits(self,start_freq_MHz=100,end_freq_MHz=101,hybridicity=1,
                               start_phase=0,sweep_frac=0.5,_time=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
 
         sweep_start_index = int(len(_time)*(0.5-sweep_frac/2))
         sweep_end_index = int(len(_time)*(0.5+sweep_frac/2))
@@ -786,9 +801,9 @@ class ActionContainer():
     def freq_min_jerk(self,start_freq_MHz=100,end_freq_MHz=101,start_phase=0,_time=None,_T=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
         d = (end_freq_MHz-start_freq_MHz)
         if _T == None:
+            _time = _time - _time[0] # we want the time to start from zero if the _T parameter is not specified (i.e. not with hybrid sweep)
             _T = _time[-1] - _time[0]
         return d*(10*(_time/_T)**3 - 15*(_time/_T)**4 + 6*(_time/_T)**5) + start_freq_MHz
 
@@ -796,7 +811,7 @@ class ActionContainer():
                          start_phase=0,noise_width_MHz=10,_time=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
         freq = self.freq_sweep(start_freq_MHz,end_freq_MHz,
                                 hybridicity,start_phase,_time)
         freq += np.random.uniform(low=-noise_width_MHz/2, high=noise_width_MHz/2, size=(len(freq)))
@@ -806,7 +821,7 @@ class ActionContainer():
                         start_phase=0,dither_amp_MHz=10,dither_freq_MHz=1,_time=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
         freq = self.freq_sweep(start_freq_MHz,end_freq_MHz,
                                 hybridicity,start_phase,_time)
         freq += dither_amp_MHz*np.sin(2*np.pi*_time*dither_freq_MHz*1e6)
@@ -820,13 +835,13 @@ class ActionContainer():
     def amp_ramp(self,start_amp=1,end_amp=0,_time=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we don't care about the actual time, just want an increasing array
+        _time = _time - _time[0] # we don't care about the actual time, just want an increasing array
         return np.linspace(start_amp,end_amp,len(_time))
     
     def amp_drop(self,start_amp=1,drop_amp=0,drop_time_us=100,_time=None):
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
         amp = np.ones_like(_time)*start_amp
         duration = _time[-1]
         drop_idx = np.where(np.abs(_time-duration/2)<((drop_time_us*1e-6)/2))
@@ -845,7 +860,7 @@ class ActionContainer():
             return self.amp_ramp(start_amp,end_amp,_time)
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we don't care about the actual time, just want an increasing array
+        _time = _time - _time[0] # we don't care about the actual time, just want an increasing array
         if index > 0:
             return np.flip((index**(_time/_time[-1])-1)/(index-1)*(start_amp-end_amp) + end_amp)
         else:
@@ -861,7 +876,7 @@ class ActionContainer():
         """
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
         return mod_amp*np.sin(2*np.pi*mod_freq_kHz*1e3*_time)+start_amp
     
     def amp_two_approx_exp(self,start_amp=0,middle_amp=1,end_amp=0,
@@ -879,7 +894,7 @@ class ActionContainer():
         """
         if _time is None:
             _time = self.time
-        _time -= _time[0] # we want the time to start from zero
+        _time = _time - _time[0] # we want the time to start from zero
         ramp_1_end_index = int(len(_time)*frac_1)
         ramp_2_start_index = int(len(_time)*(1-frac_2))
         
