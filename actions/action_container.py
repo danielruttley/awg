@@ -89,6 +89,9 @@ class ActionContainer():
         Boolean used by the `MainWindow` class to track whether this action 
         is used for rearrangement. This has to be toggled externally, no method
         in this class will toggle this boolean.
+    sync : bool
+        Boolean used by the `MainWindow` class to track whether this action
+        is used for synchronisation between the AWG and Dexter.
     amp_adjuster : AmpAdjuster2D
         The AmpAdjuster for this action_container. This is a shared object 
         between all ActionContainers of the same channel. It converts the 
@@ -132,6 +135,7 @@ class ActionContainer():
         self.needs_to_calculate = True
         self.needs_to_transfer = True
         self.rearr = False
+        self.sync = False
         
     def get_action_params(self):
         """Returns a complete `action_params` dict that could be used to 

@@ -387,7 +387,25 @@ class AWG():
         current_segment = int('1'*4,2) & step_data.value
         
         return current_step.value, current_segment
+    
+    def get_min_segment_size(self):
+        """Returns the minimum segment size available for this card.
         
+        Returns
+        -------
+        int
+            The minimum number of samples for the card in segment mode.
+
+        """
+        active_channels = int(self.lNumChannels.value)
+        if active_channels == 1:
+            return 384
+        elif active_channels == 2:
+            return 192
+        elif active_channels == 4:
+            return 96
+        else:
+            raise ValueError(f'Number of active channels should be 1, 2, or 4 but is {active_channels}.')
             
     def multiplex(self,arrays):
         """Converts a list of np.ndarrays in the form of [a,a,,...], 

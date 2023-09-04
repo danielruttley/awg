@@ -44,6 +44,7 @@ color_rb = '#bdd7ee'
 color_loop_until_trigger = '#ffff99'
 color_rearr_off = '#e04848'
 color_rearr_on = '#05a815'
+color_sync_on = '#b2e1eb'
 color_rearr_other_segment = '#b8f2be'
 color_rearr_segment = '#92f09b'
 color_needs_to_calculate = '#dfbbf0'
@@ -53,7 +54,7 @@ color_phase_jump = '#ff000020'
 dicts_to_save = ['card_settings','amp_adjuster_settings']
 datagen_settings_to_save = ['button_couple_steps_segments','button_prevent_freq_jumps',
                             'button_prevent_amp_jumps','button_freq_adjust_looped_segments',
-                            'button_prevent_phase_jumps']
+                            'button_prevent_phase_jumps','button_sync']
 
 class MainWindow(QMainWindow):
     """Acts as controller for the AWG program.
@@ -265,6 +266,16 @@ class MainWindow(QMainWindow):
         self.layout_datagen.addLayout(rearr_layout)
 
         self.layout_datagen.addWidget(QHLine())
+
+        sync_layout = QHBoxLayout()
+        self.button_sync = QPushButton("Synchronisation OFF")
+        self.button_sync.setCheckable(True)
+        self.button_sync.setStyleSheet('')
+        self.button_sync.toggled.connect(self.sync_toggle)
+        sync_layout.addWidget(self.button_sync)
+        self.layout_datagen.addLayout(sync_layout)
+
+        self.layout_datagen.addWidget(QHLine())
         
         layout_segment_title = QHBoxLayout()
         layout_segment_title.addWidget(QLabel('<h3>segments<\h3>'))
@@ -445,6 +456,12 @@ class MainWindow(QMainWindow):
         """
         logging.info("Loading AWG params from '{}'.".format(filename))
         
+        # Turn off rearrangement and synchronisation whilst other segments are loaded.
+        rearr = self.button_rearr.isChecked()
+        if rearr:
+            self.button_rearr.setChecked(False)
+        self.button_sync.setChecked(False)
+
         with open(filename, 'r') as f:
             data = json.load(f)
         
@@ -458,25 +475,20 @@ class MainWindow(QMainWindow):
                     
         self.update_card_settings()
         self.set_datagen_settings(data['datagen_settings'])
+
         self._create_layout_autoplotter()
         self.set_amp_adjuster_settings(update_segment_list=False)
-        
-        self.segment_add_all(data['segments'])
 
         self.steps = data['steps']
+        self.segment_add_all(data['segments'])
 
-        if self.button_rearr.isChecked():
-            try:
-                for step in self.steps:
-                    step['segment'] += len(self.rr.base_segments)
-            except AttributeError:
-                pass
+        if rearr: # Restore original rearrangement setting.
+            self.button_rearr.setChecked(rearr)
 
         if update_list_when_loaded:
             self.segment_list_update()
 
         logging.debug("Finished loading AWG params from '{}'.".format(filename))
-        # self.calculate_send()
         
     def load_params_dialogue(self):
         filename = QFileDialog.getOpenFileName(self, 'Load AWGparam',self.last_AWGparam_folder,"AWG parameters (*.awg)")[0]
@@ -495,10 +507,10 @@ class MainWindow(QMainWindow):
             data[name] = getattr(self,name)
             
         data['datagen_settings'] = self.get_datagen_settings()
-            
+
         segments_data = []
         for segment in self.segments:
-            if segment not in self.rr.base_segments:
+            if (segment not in self.rr.base_segments) and (not segment[0].sync):
                 segment_data = {}
                 for i,action in enumerate(segment):
                     action_params = action.get_action_params()
@@ -508,9 +520,6 @@ class MainWindow(QMainWindow):
                 segments_data.append(segment_data)
         
         data['segments'] = segments_data
-
-        print(self.get_non_rearr_steps())
-        
         data['steps'] = self.get_non_rearr_steps()
 
         try:
@@ -586,6 +595,12 @@ class MainWindow(QMainWindow):
                 button = getattr(self,name)
                 button.blockSignals(True)
                 button.setChecked(value)
+                button.blockSignals(False)
+
+        if 'button_sync' not in settings.keys(): # For old param files where sync doesn't exist set it to False.
+                button = getattr(self,'button_sync')
+                button.blockSignals(True)
+                button.setChecked(False)
                 button.blockSignals(False)
         
     def update_rearr_settings(self,rearr_settings):
@@ -795,6 +810,7 @@ class MainWindow(QMainWindow):
             self.segments.append(segment)
         
         self.rearr_toggle()
+        self.sync_toggle()
     
     def segment_add(self,segment_params,editing_segment=None):
         """Add a new segment to the segment list or edits an exisiting 
@@ -918,17 +934,19 @@ class MainWindow(QMainWindow):
             default is None.
         
         """
+        sync_offset = self.get_sync_offset()
+
         try:
             if self.button_rearr.isChecked():
                 logging.debug('Activating rearrangement.')
                 len_before = len(self.segments)
-                self.segments[0:0] = self.rr.base_segments
+                self.segments[sync_offset:sync_offset] = self.rr.base_segments
                 for _ in range(self.rr.get_number_rearrangement_segments_needed()-1): # if needed copy the rearrangement segment multiple times
-                    self.segments.insert(self.rr.segment+1,self.rr.base_segments[self.rr.segment])
+                    self.segments.insert(self.rr.segment+1+sync_offset,self.rr.base_segments[self.rr.segment])
                 segments_added = len(self.segments) -  len_before
                 print('segments added =',segments_added)
                 print('steps before',self.steps)
-                for step in self.steps:
+                for step in self.steps[sync_offset:]:
                     step['segment'] += segments_added #len(self.rr.base_segments) + (self.rr.get_number_rearrangement_segments_needed()-1)
                 print('steps after',self.steps)
                 self.button_rearr.setText(f'Rearrangement ON ({self.rr.mode})')
@@ -947,7 +965,7 @@ class MainWindow(QMainWindow):
                 segments_removed = len_before - len(self.segments)
                 print('segments removed =',segments_removed)
                 self.steps = [x for x in self.steps if x['segment'] >= segments_removed]
-                for step in self.steps:
+                for step in self.steps[sync_offset:]:
                     step['segment'] -= segments_removed
                 self.button_rearr.setText('Rearrangement OFF')
                 self.button_rearr.setStyleSheet('background-color: '+color_rearr_off)
@@ -958,7 +976,83 @@ class MainWindow(QMainWindow):
         except AttributeError:
             logging.debug('Could not toggle rearrangement because the '
                           'RearrangmentHandler does not yet exist.')
+            
+    def sync_toggle(self):
+        """Turns on or off a synchronisation segment to be used between the 
+        AWG and Dexter.
         
+        Parameters
+        ----------
+        start_index : int or None
+            The index to use as the first rearrangement segment. If None, the 
+            currently selected row in the segment list will be used. The 
+            default is None.
+        
+        """
+        if self.button_sync.isChecked():
+            logging.debug('Activating synchronisation.')
+
+            len_before = len(self.segments)
+
+             # make the shortest possible action to be used for synchronisation
+            segment = [] # store the action for all channels
+            for channel in range(self.card_settings['active_channels']):
+                # just make the same empty segment for all channels
+                action_params = {'duration_ms' : 1e-9, # try to make 1ns but will be longer based on card settings
+                                'phase_behaviour' : 'manual',
+                                'freq' : {'function' : 'static',
+                                          'start_freq_MHz': [100],
+                                           'start_phase' : [0]},
+                                'amp' : {'function' : 'static',
+                                          'start_amp': [0]}}
+                action = ActionContainer(action_params,self.card_settings,self.amp_adjusters[channel])
+                action.rearr = False
+                action.sync = True
+                action.update_param(param='phase_behaviour',value=['manual'])
+                action.set_start_phase([np.random.random()*360]) # sets phase to random in degrees
+                segment.append(action)
+            self.segments.insert(0,segment)
+
+            segments_added = len(self.segments) -  len_before
+            self.sync_offset = segments_added
+            print('segments added =',segments_added)
+            print('steps before',self.steps)
+            for step in self.steps:
+                step['segment'] += segments_added
+            print('steps after',self.steps)
+
+            self.button_sync.setText(f'Synchronisation ON')
+            self.button_sync.setStyleSheet('background-color: '+color_sync_on)
+        else:
+            logging.debug('Deactivating synchronisation.')
+            len_before = len(self.segments)
+            self.segments = [x for x in self.segments if not x[0].sync]
+            segments_removed = len_before - len(self.segments)
+            print('segments removed =',segments_removed)
+            self.steps = [x for x in self.steps if x['segment'] >= segments_removed]
+            for step in self.steps:
+                step['segment'] -= segments_removed
+
+            self.sync_offset = 0
+            self.button_sync.setText(f'Synchronisation OFF')
+            self.button_sync.setStyleSheet('')
+
+        for segment in self.segments:
+            for action in segment:
+                action.needs_to_transfer = True
+        self.segment_list_update()
+
+    def get_sync_offset(self):
+        """Returns the number of segments added at the start for synchronisation.
+        This should almost always be 0 or 1.
+        
+        """
+        try:
+            return self.sync_offset
+        except AttributeError:
+            logging.debug('sync_offset has not yet been set so assuming correct '
+                          'offset is 0.')
+            return 0
         
     def rearr_recieve(self,string):
         """Accepts a rearrangement binary string from the Networker that it 
@@ -983,7 +1077,7 @@ class MainWindow(QMainWindow):
         None.
         
         """
-        
+        sync_offset = self.get_sync_offset()
         if not self.button_rearr.isChecked():
             logging.error('Recieved rearrangement string, but rearrangement '
                           'mode is not active. Ignoring.')
@@ -992,7 +1086,7 @@ class MainWindow(QMainWindow):
         segment_data = self.rr.accept_string(string) # segments data is returned as a list in case simultaneous rearrangements needed
         logging.debug(f'Recieved {len(segment_data)} segments, uploading to segments {self.rr.segment} - {self.rr.segment+len(segment_data)-1}.')
         for data_i, data in enumerate(segment_data):
-            self.awg.transfer_segment_data(self.rr.segment+data_i,data)
+            self.awg.transfer_segment_data(self.rr.segment+sync_offset+data_i,data)
             
     def data_recieve(self,data_list):
         """Accepts data recieved from PyDex over TCP from the Networker to 
@@ -1189,6 +1283,9 @@ class MainWindow(QMainWindow):
             logging.error('A segment must be selected before it can be edited.')
         elif len(selectedRows) > 1:
             logging.error('Only one segment can be edited at once.')
+        
+        if selectedRows[0] < self.get_sync_offset():
+            logging.debug('Cannot edit synchronisation segment.')
         else:
             self.w = SegmentCreationWindow(self,selectedRows[0])
             self.w.show()
@@ -1324,6 +1421,8 @@ class MainWindow(QMainWindow):
         calculations that normally take place when the segment list is updated.
         
         """
+        sync_offset = self.get_sync_offset()
+
         for i in range(self.list_segments.count()):
             self.list_segments.takeItem(0)
         for i,segment in enumerate(self.segments):
@@ -1342,10 +1441,12 @@ class MainWindow(QMainWindow):
                 item.setFont(font)
             try:
                 if segment in self.rr.base_segments:
-                    if i == self.rr.segment:
+                    if i-sync_offset == self.rr.segment:
                         item.setBackground(QColor(color_rearr_segment))
                     else:
                         item.setBackground(QColor(color_rearr_other_segment))
+                if segment[0].sync:
+                    item.setBackground(QColor(color_sync_on))
             except AttributeError:
                 pass
             self.list_segments.addItem(item)
@@ -1703,13 +1804,15 @@ class MainWindow(QMainWindow):
         segment is used more than once, the first instance will take priority.
         
         """
+        sync_offset = self.get_sync_offset()
+
         if self.button_couple_steps_segments.isChecked():
             new_steps = []
             for i,segment in enumerate(self.segments):
                 found_existing_step = False
                 try:
                     if segment in self.rr.base_segments:
-                        if (i == self.rr.segment-1) or (i == len(self.rr.base_segments)+(self.rr.get_number_rearrangement_segments_needed()-1)-1):
+                        if (i-sync_offset == self.rr.segment-1) or (i-sync_offset == len(self.rr.base_segments)+(self.rr.get_number_rearrangement_segments_needed()-1)-1):
                             new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'loop_until_trigger','rearr' : True})
                         else:
                             new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'continue','rearr' : True})
@@ -1723,7 +1826,10 @@ class MainWindow(QMainWindow):
                         found_existing_step = True
                         break
                 if not found_existing_step:
-                    new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
+                    if segment[0].sync == True: # loop synchronisation segments automatically
+                        new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'loop_until_trigger', 'rearr' : False})
+                    else:
+                        new_steps.append({'segment': i, 'number_of_loops': 1, 'after_step' : 'continue', 'rearr' : False})
             self.steps = new_steps
             # try:
             #     self.steps[-1]['after_step'] = 'loop_until_trigger'
@@ -1775,6 +1881,7 @@ class MainWindow(QMainWindow):
                     segments = [segment]
                     color = None
                     is_rearr_seg = False
+                    is_sync_seg = segment[0].sync
 
                     if segment in self.rr.base_segments:
                         if segment == self.rr.base_segments[self.rr.segment]:
@@ -1785,6 +1892,9 @@ class MainWindow(QMainWindow):
                                 # segments = self.rr.rearr_segments
                         else:
                             color = color_rearr_other_segment
+
+                    if is_sync_seg:
+                        color = color_sync_on
 
                     for index, segment in enumerate(segments):
                         if color != None:
@@ -1810,6 +1920,8 @@ class MainWindow(QMainWindow):
                         label = '{}'.format(step['segment'])
                         if is_rearr_seg:
                             label += ' (R{})'.format(index)
+                        if is_sync_seg:
+                            label += ' (sync.)'
                         freq_segment_xlabels[current_pos+0.5] = label + '\n{}'.format(action.freq_function_name)
                         amp_segment_xlabels[current_pos+0.5] = label + '\n{}'.format(action.amp_function_name)
 
@@ -1966,22 +2078,25 @@ class MainWindow(QMainWindow):
             return None
 
     def get_non_rearr_steps(self):
-        """Returns only the steps that aren't rearrangement steps 
-        for saving to the AWGparam file. This assumes that 
-        all rearrangement segments begin from index 0."""
+        """Returns only the steps that aren't rearrangement steps or 
+        synchronisation steps for saving to the AWGparam file. This assumes that 
+        all rearrangement and synchronisation segments are before the 
+        main segments.
+
+        """
         steps = deepcopy(self.steps)
-        print(steps)
-        if not self.button_rearr.isChecked():
-            return steps
+        sync_offset = self.get_sync_offset()
+
+        if (not self.button_rearr.isChecked()) and (sync_offset):
+            return steps # Just return the unmodified dict if this is fine.
         
         non_rearr_steps = []
-
+        segments_to_ignore = len(self.rr.base_segments) + sync_offset
         for step in steps:
-            if step['segment'] >= len(self.rr.base_segments):
-                step['segment'] -= len(self.rr.base_segments)
+            if step['segment'] >= segments_to_ignore:
+                step['segment'] -= segments_to_ignore
                 non_rearr_steps.append(step)
-        
-        print(non_rearr_steps)
+
         return non_rearr_steps
             
 if __name__ == '__main__':
