@@ -8,6 +8,7 @@ from qtpy.QtWidgets import (QVBoxLayout,QWidget,QFormLayout,QComboBox,
 from qtpy.QtGui import QIntValidator,QDoubleValidator
 
 from .helpers import convert_str_to_list, QHLine
+from .colors import *
 
 from actions import ActionContainer
 
@@ -433,11 +434,67 @@ class RearrSettingsWindow(QWidget):
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        settings = ['start_freq_MHz','target_freq_MHz','channel','segment','mode']
+        self.rr_widgets = [RearrHandlerWidget(self.mainWindow,rr) for rr in self.mainWindow.rrs]
+        for rr_widget in self.rr_widgets:
+            layout.addWidget(rr_widget)
+
+        self.button_new = QPushButton("New rearrangement handler")
+        self.button_new.clicked.connect(self.add_rearr_handler)
+        layout.addWidget(self.button_new)
+
+        self.button_save = QPushButton("Save")
+        self.button_save.clicked.connect(self.update_rearr_settings)
+        layout.addWidget(self.button_save)
+           
+    def update_rearr_settings(self):
+        rrs_settings = []
+        for rr_widget in self.rr_widgets:
+            new_rearr_settings = {}
+            for row in range(rr_widget.layout_rearr_settings.rowCount()):
+                key = rr_widget.layout_rearr_settings.itemAt(row,0).widget().text()
+                widget = rr_widget.layout_rearr_settings.itemAt(row,1).widget()
+                if key == 'channel':
+                    value = int(widget.currentText())
+                elif key == 'mode':
+                    value = widget.currentText()
+                elif 'freq' in key:
+                    try:
+                        value = convert_str_to_list(widget.text())
+                    except:
+                        logging.error('Could not evaluate {} for rearrangement setting {}'.format(widget.text(),key))
+                        return
+                else:
+                    value = int(widget.text())
+                new_rearr_settings[key] = value
+            rrs_settings.append(new_rearr_settings)
+        self.mainWindow.update_rearr_settings(rrs_settings)
+
+    def add_rearr_handler(self):
+        self.mainWindow.add_rearr_handler()
+
+    def __del__(self):
+        self.close()
+
+class RearrHandlerWidget(QWidget):
+    def __init__(self,mainWindow,rearrHandler):
+        super().__init__()
+        # self.rearrSettingsWindow = rearrSettingsWindow
+        self.mainWindow = mainWindow
+        self.rr = rearrHandler
+
+        self.index = self.mainWindow.rrs.index(self.rr)
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        
+        layout.addWidget(QLabel(f'Rearrangement Handler {self.index}'))
+
+        settings = ['start_freq_MHz','target_freq_MHz','channel','segment',
+                    'mode','starting_segment']
 
         self.layout_rearr_settings = QFormLayout()
         for key in settings:
-            value = getattr(self.mainWindow.rr,key)
+            value = getattr(self.rr,key)
             if key == 'channel':
                 widget = QComboBox()
                 widget.addItems([str(x) for x in list(range(self.mainWindow.card_settings['active_channels']))])
@@ -454,29 +511,37 @@ class RearrSettingsWindow(QWidget):
             self.layout_rearr_settings.addRow(key, widget)
         layout.addLayout(self.layout_rearr_settings)
 
-        self.button_save = QPushButton("Save")
-        self.button_save.clicked.connect(self.update_rearr_settings)
-        layout.addWidget(self.button_save)
-           
-    def update_rearr_settings(self):
-        new_rearr_settings = {}
-        for row in range(self.layout_rearr_settings.rowCount()):
-            key = self.layout_rearr_settings.itemAt(row,0).widget().text()
-            widget = self.layout_rearr_settings.itemAt(row,1).widget()
-            if key == 'channel':
-                value = int(widget.currentText())
-            elif key == 'mode':
-                value = widget.currentText()
-            elif 'freq' in key:
-                try:
-                    value = convert_str_to_list(widget.text())
-                except:
-                    logging.error('Could not evaluate {} for rearrangement setting {}'.format(widget.text(),key))
-                    return
-            else:
-                value = int(widget.text())
-            new_rearr_settings[key] = value
-        self.mainWindow.update_rearr_settings(new_rearr_settings)
+        self.button_delete = QPushButton("Delete Handler")
+        self.button_delete.clicked.connect(self.rearr_delete)
+        layout.addWidget(self.button_delete)
+
+        self.button_rearr = QPushButton("Rearrangement toggle")
+        self.button_rearr.setCheckable(True)
+        self.button_rearr.toggled.connect(self.rearr_toggle)
+        self.set_rearr_button_style()
+        layout.addWidget(self.button_rearr)
+
+    def rearr_toggle(self):
+        self.mainWindow.rearr_toggle(rearr_index=self.index)
+        # self.set_rearr_button_style()
+
+    def rearr_delete(self):
+        self.mainWindow.delete_rearr_handler(self.index)
+        # self.set_rearr_button_style() # don't need this because window has closed
+    
+    def set_rearr_button_style(self):
+        if self.rr.enabled:
+            self.button_rearr.blockSignals(True)
+            self.button_rearr.setChecked(True)
+            self.button_rearr.blockSignals(False)
+            self.button_rearr.setText(f'Rearrangement ON ({self.rr.mode})')
+            self.button_rearr.setStyleSheet('background-color: '+color_rearr_on)
+        else:
+            self.button_rearr.blockSignals(True)
+            self.button_rearr.setChecked(False)
+            self.button_rearr.blockSignals(False)
+            self.button_rearr.setText('Rearrangement OFF')
+            self.button_rearr.setStyleSheet('background-color: '+color_rearr_off)
         
 class AmpAdjusterSettingsWindow(QWidget):
     def __init__(self,mainWindow,amp_adjuster_settings):

@@ -72,6 +72,8 @@ class RearrangementHandler():
         None.
 
         """
+        self.enabled = False
+        self.starting_segment = 0 # index to place the rearr handler at when enabled
         self.mode = 'simultaneous' # specified here to maintain compatability with older .awgrr files.
         self.main_window = main_window
         self.load_params(filename)
@@ -233,6 +235,11 @@ class RearrangementHandler():
         else:
             return len(self.target_freq_MHz)
         
+    def get_used_segments(self):
+        """Returns a list of segments that the rearrangement handler will use
+        if enabled."""
+        return range(self.starting_segment,self.starting_segment+len(self.base_segments))
+
     def calculate_rearr_segment_data(self):
         """Takes the data from the ActionContainers for the rearrangement 
         segments and precalculates the int16 data to be sent to the card at 
