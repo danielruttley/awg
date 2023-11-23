@@ -15,7 +15,8 @@ from os import path, makedirs
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from actions import ActionContainer, shared_segment_params
 
-params_to_save = ['start_freq_MHz','target_freq_MHz','channel','segment','mode']
+params_to_save = ['start_freq_MHz','target_freq_MHz','channel','segment',
+                  'mode','starting_segment','enabled']
 
 max_tone_num = 100
 
@@ -76,7 +77,7 @@ class RearrangementHandler():
         self.starting_segment = 0 # index to place the rearr handler at when enabled
         self.mode = 'simultaneous' # specified here to maintain compatability with older .awgrr files.
         self.main_window = main_window
-        self.load_params(filename)
+        self.load_params_from_file(filename)
         
     def create_actions(self,segment_params_list=None):
         """Creates the `ActionContainer` objects that contains the 
@@ -106,7 +107,7 @@ class RearrangementHandler():
                         channel_params[shared_segment_param] = segment_params[shared_segment_param]
                     if segment_index in [0, self.segment, len(segment_params_list)-1]:
                         channel_params['phase_behaviour'] = 'optimise'
-                    print('check active channels',channel,segment_params)
+                    logging.debug(f'Active rearrangement channels {channel}')
                     try:
                         channel_params = {**channel_params,**segment_params['Ch{}'.format(channel)]}
                     except KeyError:
@@ -222,8 +223,6 @@ class RearrangementHandler():
         self.rearr_segments['empty'] = {}
         self.rearr_segments['empty']['empty'] = actions # still make dict 2 levels deep so that the rest of the code works
 
-        print(self.rearr_segments)
-
     def get_number_rearrangement_segments_needed(self):
         """Returns the number of rearrangement segments that the need to be
         reserved for the RearrangementHandler to dynamically send data to
@@ -266,8 +265,8 @@ class RearrangementHandler():
                 segment_data = []
                 for action_index, action in enumerate(segment):
                     if action.needs_to_calculate:
-                        logging.debug(f'Calculating rearrangement movement {start_freq_MHz} MHz -> {end_freq_MHz} MHz '
-                                      f'({i_seg}/{len(self.rearr_unique_movements)}) data, channel {action_index}.')
+                        logging.info(f'Calculating rearrangement movement {start_freq_MHz} MHz -> {end_freq_MHz} MHz '
+                                     f'({i_seg}/{len(self.rearr_unique_movements)}) data, channel {action_index}.')
                         # action.set_start_phase(None)
                         action.calculate()
                     segment_data.append(np.int16(action.data*(2**15/self.main_window.awg.max_output_mV))) # convert to int16 here to save time later
@@ -282,7 +281,6 @@ class RearrangementHandler():
                         segment_data = segment_data[0] # remove from list because we have done the multiplexing (but only 1 channel)
                 i_seg += 1
                 self.rearr_segments_data[start_freq_MHz][end_freq_MHz] = segment_data
-        print(self.rearr_segments_data)
     
     def generate_segment_ids(self):
         """Generates the potential segment ids to index segments.
@@ -316,7 +314,6 @@ class RearrangementHandler():
                 cut_final_occupations = [x[:last_1_index] for x in final_occupations]
                 if occupation[:last_1_index] not in cut_final_occupations:
                     final_occupations.append(occupation)
-                    print(occupation)
         self.occupations = final_occupations
         self.num_segments = len(self.occupations)
         
@@ -414,20 +411,14 @@ class RearrangementHandler():
         freqs = [[self.start_freq_MHz[i] for i in x] for x in indicies]
         return freqs
 
-    def save_params(self,filename):
-        """Saves the parameters needed to recreate this object to a 
-        .txt file at the specified filename.
-        
-        Parameters
-        ----------
-        filename : str
-            The filename to save the params file at.
+    def get_params(self):
+        """Gets the parameters needed to recreate this object to be save to a
+        .awgrr file by the main controller.
         
         Returns
         -------
         None.
         """
-        logging.info("Saving rearrangement params to '{}'.".format(filename))
               
         data = {}
 
@@ -446,18 +437,14 @@ class RearrangementHandler():
         
         data['base_segments'] = segments_data
 
-        try:
-            makedirs(path.dirname(filename),exist_ok=True)
-        except FileExistsError as e:
-            logging.warning('FileExistsError thrown when saving '
-                            'rearrangement params file',e)
-            
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-            
-        logging.info("Rearrangement params saved to '{}'".format(filename))
+        return data
+    
+    def load_params_from_file(self,filename):
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        self.load_params(data)
 
-    def load_params(self,filename):
+    def load_params(self,data):
         """Loads the rearrangment parameters from a provided file to 
         set up the RearrangementHandler.
         
@@ -472,11 +459,9 @@ class RearrangementHandler():
         None.
 
         """
-        with open(filename, 'r') as f:
-            data = json.load(f)
-
         for param in params_to_save:
             try:
+                print(param)
                 setattr(self,param,data[param])
             except KeyError: # allow older param files which didn't specify mode to skip this
                 pass
@@ -489,7 +474,7 @@ class RearrangementHandler():
         self.generate_segment_ids()
         self.create_actions(data['base_segments'])
 
-    def update_params(self,params_dict):
+    def update_params(self,params_dict,ignore_enabled=True):
         """Dictionary containing new values to update the attributes of 
         the `RearrangementHandler` to.
         
@@ -505,6 +490,8 @@ class RearrangementHandler():
         
         """
         for key,value in params_dict.items():
+            if key == 'enabled' and ignore_enabled:
+                continue
             setattr(self,key,value)
 
         self.generate_segment_ids()

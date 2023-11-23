@@ -129,7 +129,7 @@ class AmpAdjuster2D():
                 key = list(contour_dict.keys())[i]
                 y = np.array(contour_dict[key]['Calibration'](freq), ndmin=1) # return amplitude in mV to keep constant optical power
                 if (np.size(y)==1 and y>280) or any(y > 280):
-                    print('WARNING: power calibration overflow: required power is > 280mV')
+                    logging.warning('Power calibration overflow: required power is > 280mV. This has been truncated.')
                     y[y>280] = 280
                 return y
         

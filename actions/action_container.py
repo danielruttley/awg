@@ -116,10 +116,9 @@ class ActionContainer():
         try:
             self.amp_comp_filename = action_params['amp_comp_filename']
         except Exception as e:
-            print(e)
+            logging.debug('No amp_comp_filename in action_params. No amplitude '
+                          'compensation will be applied.')
             self.amp_comp_filename = None
-
-        print('amp_comp_filename:',self.amp_comp_filename)
 
         self.card_settings = card_settings
 

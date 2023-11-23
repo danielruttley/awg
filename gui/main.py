@@ -535,15 +535,25 @@ class MainWindow(QMainWindow):
             self.save_params(filename)
             self.last_AWGparam_folder = os.path.dirname(filename)
         
-    def load_rearr_params(self,filename,rr_index=0):
+    def load_rearr_params(self,filename):
         logging.info('Loading rearrangement from "{}"'.format(filename))
 
-        rrs_enabled = [rr.enabled for rr in self.rrs]
+        with open(filename, 'r') as f:
+            data = json.load(f)
+
+        # rrs_enabled = [rr.enabled for rr in self.rrs]
         self.rearr_toggle_all(False) # Deactivate all RHs
 
-        self.rrs[rr_index].load_params(filename)
+        rrs_and_params = list(zip(range(len(self.rrs)),self.rrs,data))
+        rrs_and_params.sort(key=lambda x: x[2]['starting_segment'])
+        print(rrs_and_params)
 
-        self.rearr_set_enabled(rrs_enabled) # reactivate rearr params if required
+        for [rr_index, rr, params] in rrs_and_params:
+            logging.debug(f'Loading rearrangement handler {rr_index} with params {params}')
+            rr.load_params(params)
+            self.rearr_toggle(rearr_index=rr_index) # toggle one at a time to ensure the right segments are on
+
+        # self.rearr_set_enabled(rrs_enabled) # reactivate rearr params if required
 
         logging.info('Rearrangement loaded from "{}"'.format(filename))
         
@@ -556,7 +566,20 @@ class MainWindow(QMainWindow):
     def save_rearr_params_dialogue(self,rr_index=0):
         filename = QFileDialog.getSaveFileName(self, 'Save AWGrearrparam',self.last_AWGparam_folder,"AWG rearrangement parameters (*.awgrr)")[0]
         if filename != '':
-            self.rrs[rr_index].save_params(filename)
+            logging.info("Saving rearrangement params to '{}'.".format(filename))
+            params = [rr.get_params() for rr in self.rrs]
+
+            try:
+                os.makedirs(os.path.dirname(filename),exist_ok=True)
+            except FileExistsError as e:
+                logging.warning('FileExistsError thrown when saving '
+                                'rearrangement params file',e)
+                
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(params, f, ensure_ascii=False, indent=4)
+                
+            logging.info("Rearrangement params saved to '{}'".format(filename))
+
             self.last_AWGparam_folder = os.path.dirname(filename)
             
     def open_rearr_settings_window(self):
@@ -616,15 +639,14 @@ class MainWindow(QMainWindow):
 
         if type(rearr_settings) == dict:
             rearr_settings = [rearr_settings]
-            logging.debug('update_rearr_settings recieved legacy rearr_settings '
-                          '(dict rather than list of dicts). Padding to a list '
-                          'of dicts and will only update the first rearrangement '
-                          'handler.')
+            logging.warning('update_rearr_settings recieved legacy rearr_settings '
+                           '(dict rather than list of dicts). Padding to a list '
+                           'of dicts and will only update the first rearrangement '
+                           'handler.')
         
-        print(rearr_settings)
-        
+
         for rr, params in zip(self.rrs,rearr_settings):
-            rr.update_params(params) # moved this before activating/reactivating rr segments so that starting segment is respected
+            rr.update_params(params,ignore_enabled=True) # moved this before activating/reactivating rr segments so that starting segment is respected
 
         rrs_enabled = [rr.enabled for rr in self.rrs]
         self.rearr_toggle_all(False) # Deactivate all RHs        
@@ -632,15 +654,16 @@ class MainWindow(QMainWindow):
 
         self.w = None # close secondary windows
 
+        self.button_autoplot.setChecked(False)
         self.button_autoplot.blockSignals(False)
-        self.button_autoplot.setChecked(autoplot)
+        self.plot_autoplot_graphs()
     
     def calculate_all_segments(self):
         logging.debug('Calculating all segments.')
         for segment_index, segment in enumerate(self.segments):
             for action_index, action in enumerate(segment):
                 if action.needs_to_calculate:
-                    logging.debug('Calculating segment {}, channel {}.'.format(segment_index,action_index))
+                    logging.info('Calculating segment {}, channel {}.'.format(segment_index,action_index))
                     if segment_index == 0:
                         action.set_start_phase(None)
                     else:
@@ -693,6 +716,9 @@ class MainWindow(QMainWindow):
                         for segment in self.segments[row:]:
                             for action in segment:
                                 action.needs_to_transfer = True
+                        for rr in self.rrs:
+                            if rr.starting_segment > row:
+                                rr.starting_segment -= 1 # decrease starting segment of rearrangement handler by 1 to account for deleted segment
                         if self.button_couple_steps_segments.isChecked():
                             step_index = self.get_step_from_segment(row)
                             del self.steps[step_index]
@@ -877,6 +903,11 @@ class MainWindow(QMainWindow):
                                   'rearrangement segments. The segment '
                                   f'will be added at segment {selected_row+1} instead.')
             self.segments.insert(selected_row+1,segment)
+
+            for rr in self.rrs:
+                if rr.starting_segment > selected_row:
+                    rr.starting_segment += 1 # iterate starting segment of rearrangement handler by 1 to account for new segment
+
             for segment in self.segments[selected_row+1:]:
                 for action in segment:
                     action.needs_to_transfer = True
@@ -941,14 +972,14 @@ class MainWindow(QMainWindow):
         try:
             rr = self.rrs[rearr_index]
         except AttributeError:
-            logging.error('rrs object does not exist yet so ignoring rearr_toggle.')
+            logging.debug('rrs object does not exist yet so ignoring rearr_toggle.')
             return
         except IndexError:
-            print(self.rrs)
-            logging.error(f'{rearr_index} is not a valid rearr_index for rearr_toggle.')
+            logging.error(f'{rearr_index} is not a valid rearr_index for '
+                          'rearr_toggle. This will be ignored.')
             return
 
-        logging.debug(f'Rearrangement handler {rearr_index} enabled = {rr.enabled}')
+        logging.debug(f'Rearrangement handler {rearr_index} has enabled = {rr.enabled}')
 
         if force_toggle is None: # Set the desired state to be the opposite of the initial state if not specified.
             force_toggle = not rr.enabled
@@ -956,16 +987,19 @@ class MainWindow(QMainWindow):
         if ((not rr.enabled) and (force_toggle)): # RH not enabled and we want it to be.
             logging.debug(f'Activating rearrangement handler {rearr_index}.')
             len_before = len(self.segments)
+            if rr.starting_segment < sync_offset: # ensure syncing segments always come first
+                rr.starting_segment = sync_offset
+                logging.warning(f'Setting rearrangement starting segment to {rr.starting_segment} so that it is after the sync segment.')
+            if rr.starting_segment > len(self.segments):
+                logging.warning(f'Setting rearrangement starting segment to {rr.starting_segment} so that it is the final segment.')
             self.segments[rr.starting_segment:rr.starting_segment] = rr.base_segments
             for _ in range(rr.get_number_rearrangement_segments_needed()-1): # if needed copy the rearrangement segment multiple times
                 self.segments.insert(rr.starting_segment + rr.segment + 1, rr.base_segments[rr.segment])
             segments_added = len(self.segments) -  len_before
             for other_rr in self.rrs:
                 if not (other_rr is rr):
-                    print(f'other_rr starting segment {other_rr.starting_segment}')
                     if other_rr.starting_segment > rr.starting_segment:
                         other_rr.starting_segment += segments_added
-                    print(f'other_rr starting segment {other_rr.starting_segment}')
 
             for step in self.steps[rr.starting_segment:]:
                 step['segment'] += segments_added #len(self.rr.base_segments) + (self.rr.get_number_rearrangement_segments_needed()-1)
@@ -978,13 +1012,10 @@ class MainWindow(QMainWindow):
             len_before = len(self.segments)
             self.segments = [x for x in self.segments if x not in rr.base_segments]
             segments_removed = len_before - len(self.segments)
-            print('segments removed =',segments_removed)
             for other_rr in self.rrs:
                 if not (other_rr is rr):
-                    print(f'other_rr starting segment {other_rr.starting_segment}')
                     if other_rr.starting_segment > rr.starting_segment:
                         other_rr.starting_segment -= segments_removed
-                    print(f'other_rr starting segment {other_rr.starting_segment}')
             self.steps = [x for x in self.steps if x['segment'] >= segments_removed]
             for step in self.steps[rr.starting_segment:]:
                 step['segment'] -= segments_removed
@@ -1052,8 +1083,6 @@ class MainWindow(QMainWindow):
 
             segments_added = len(self.segments) -  len_before
             self.sync_offset = segments_added
-            print('segments added =',segments_added)
-            print('steps before',self.steps)
 
             try:
                 for rr in self.rrs:
@@ -1063,7 +1092,6 @@ class MainWindow(QMainWindow):
 
             for step in self.steps:
                 step['segment'] += segments_added
-            print('steps after',self.steps)
 
             self.button_sync.setText(f'Synchronisation ON')
             self.button_sync.setStyleSheet('background-color: '+color_sync_on)
@@ -1072,7 +1100,6 @@ class MainWindow(QMainWindow):
             len_before = len(self.segments)
             self.segments = [x for x in self.segments if not x[0].sync]
             segments_removed = len_before - len(self.segments)
-            print('segments removed =',segments_removed)
 
             try:
                 for rr in self.rrs:
@@ -1594,7 +1621,6 @@ class MainWindow(QMainWindow):
         self.amp_adjuster_settings = []
         for adjuster in self.amp_adjusters:
             self.amp_adjuster_settings.append(adjuster.get_settings())
-        print(self.amp_adjuster_settings)
         label = 'AmpAdjuster settings ('
         for settings in self.amp_adjuster_settings:
             label += ['off, ','on, '][settings['enabled']]
@@ -1929,7 +1955,7 @@ class MainWindow(QMainWindow):
     def plot_autoplot_graphs(self):
         """Populates the autoplotter frequency graph with the steps."""
         if self.button_autoplot.isChecked():
-            logging.debug('Beginning Autoplotting...')
+            logging.info('Beginning Autoplotting...')
             # if not self.button_autoplot_condense_rearr.isChecked():
             #     logging.warning('Autoplotting all rearrangemnt steps. This may take some time...')
             # else:
@@ -1976,7 +2002,7 @@ class MainWindow(QMainWindow):
                                                                         brush=color,movable=False))
 
                         action = segment[channel]
-                        freqs, amps = action.get_autoplot_traces(show_amp_in_mV = self.button_autoplot_amp_mV.isChecked())
+                        freqs, amps = action.get_autoplot_traces(show_amp_in_mV = self.button_autoplot_amp_mV.isChecked(), num_points=num_plot_points)
                         xs = np.linspace(current_pos,current_pos+1,len(freqs[0]))
                         if step['number_of_loops'] > 1:
                             freq_plot.addItem(pg.LinearRegionItem(values=(current_pos,current_pos+1),orientation='vertical',
@@ -2026,7 +2052,7 @@ class MainWindow(QMainWindow):
                 
                 freq_plot.getAxis('bottom').setTicks([duration_xlabels.items()])
                 amp_plot.getAxis('bottom').setTicks([duration_xlabels.items()])
-            logging.debug('Autoplotting complete.')
+            logging.info('Autoplotting complete.')
     
     def export_segments_to_csv_dialogue(self):
         export_directory = QFileDialog.getExistingDirectory(self, 'Select segment export directory','.')
@@ -2079,7 +2105,6 @@ class MainWindow(QMainWindow):
         None. The list of steps in the attribute `list_steps` is updated.
 
         """
-        print(self.steps)
         selectedRows = [x.row() for x in self.list_steps.selectedIndexes()]
         if len(selectedRows) == 0:
             logging.error('A segment must be selected before it can be edited.')
@@ -2159,15 +2184,23 @@ class MainWindow(QMainWindow):
         steps = deepcopy(self.steps)
         sync_offset = self.get_sync_offset()
 
-        if (not self.button_rearr.isChecked()) and (sync_offset):
+        if (not np.any([rr.enabled for rr in self.rrs])) and (sync_offset):
             return steps # Just return the unmodified dict if this is fine.
         
         non_rearr_steps = []
-        segments_to_ignore = len(self.get_rearr_base_segments()) + sync_offset # TODO Fix this for multiple rearrangmenets
+        segments_to_ignore = list(range(self.sync_offset))
+        for rr in self.rrs:
+            if rr.enabled:
+                segments_to_ignore += list(range(rr.starting_segment,rr.starting_segment + len(rr.base_segments) + rr.get_number_rearrangement_segments_needed() - 1))
+        
+        logging.debug(f'Ignoring segments {segments_to_ignore} when saving AWGparam file as these are sync and rearrangement segments.')
+
         for step in steps:
-            if step['segment'] >= segments_to_ignore:
-                step['segment'] -= segments_to_ignore
+            if not (step['segment'] in segments_to_ignore):
+                step['segment'] -= sum(seg < step['segment'] for seg in segments_to_ignore)
                 non_rearr_steps.append(step)
+
+        logging.debug(f'Saving {len(non_rearr_steps)} steps to AWGparam file.')
 
         return non_rearr_steps
     
