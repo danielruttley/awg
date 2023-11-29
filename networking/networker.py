@@ -109,15 +109,10 @@ class Networker():
             return
         
         if 'rearrange' in command:
-            if all(x in '01' for x in arg):
-                # logging.info("Rearrangement string '{}' recieved.".format(arg))
-                start = time.perf_counter()
-                self.main_window.rearr_recieve(arg)
-                end = time.perf_counter()
-                logging.debug(f'processed rearrangement string {arg} in = {(end-start)*1e3:.1f} ms')
-            else:
-                logging.error("Invalid rearrangement string '{}' recieved. Message ignored.".format(arg))
-                return
+            start = time.perf_counter()
+            self.main_window.rearr_recieve(arg)
+            end = time.perf_counter()
+            logging.debug(f'processed rearrangement string {arg} in = {(end-start)*1e3:.1f} ms')
         elif 'set_data' in command:
             try:
                 arg = eval(arg)
@@ -159,7 +154,7 @@ class Networker():
         elif 'save' in command:
             filename_stripped = arg.rsplit('.',1)[0]
             self.main_window.save_params(filename_stripped+'.awg')
-            self.main_window.rr.save_params(filename_stripped+'.awgrr')
+            self.main_window.save_rearr_params(filename_stripped+'.awgrr')
         elif 'trigger' in command:
             logging.info('Triggering AWG as requested by TCP command.')
             self.main_window.awg.trigger()

@@ -541,11 +541,18 @@ class MainWindow(QMainWindow):
         with open(filename, 'r') as f:
             data = json.load(f)
 
+        if type(data) == dict:
+            data = [data] # this is an old params file that needs padding into a list
+
         # rrs_enabled = [rr.enabled for rr in self.rrs]
         self.rearr_toggle_all(False) # Deactivate all RHs
 
         rrs_and_params = list(zip(range(len(self.rrs)),self.rrs,data))
-        rrs_and_params.sort(key=lambda x: x[2]['starting_segment'])
+        print(rrs_and_params[0])
+        try:
+            rrs_and_params.sort(key=lambda x: x[2]['starting_segment'])
+        except KeyError:
+            pass # old params file where starting_segment not specified
         print(rrs_and_params)
 
         for [rr_index, rr, params] in rrs_and_params:
@@ -566,21 +573,23 @@ class MainWindow(QMainWindow):
     def save_rearr_params_dialogue(self,rr_index=0):
         filename = QFileDialog.getSaveFileName(self, 'Save AWGrearrparam',self.last_AWGparam_folder,"AWG rearrangement parameters (*.awgrr)")[0]
         if filename != '':
-            logging.info("Saving rearrangement params to '{}'.".format(filename))
-            params = [rr.get_params() for rr in self.rrs]
-
-            try:
-                os.makedirs(os.path.dirname(filename),exist_ok=True)
-            except FileExistsError as e:
-                logging.warning('FileExistsError thrown when saving '
-                                'rearrangement params file',e)
-                
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(params, f, ensure_ascii=False, indent=4)
-                
-            logging.info("Rearrangement params saved to '{}'".format(filename))
-
+            self.save_rearr_params(filename)
             self.last_AWGparam_folder = os.path.dirname(filename)
+
+    def save_rearr_params(self,filename):
+        logging.info("Saving rearrangement params to '{}'.".format(filename))
+        params = [rr.get_params() for rr in self.rrs]
+
+        try:
+            os.makedirs(os.path.dirname(filename),exist_ok=True)
+        except FileExistsError as e:
+            logging.warning('FileExistsError thrown when saving '
+                            'rearrangement params file',e)
+            
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(params, f, ensure_ascii=False, indent=4)
+            
+        logging.info("Rearrangement params saved to '{}'".format(filename))        
             
     def open_rearr_settings_window(self):
         self.w = RearrSettingsWindow(self)
@@ -1157,12 +1166,8 @@ class MainWindow(QMainWindow):
         None.
         
         """
-        if not self.button_rearr.isChecked():
-            logging.error('Recieved rearrangement string, but rearrangement '
-                          'mode is not active. Ignoring.')
-            return
-        
         [string,rearr_index] = string.split('RH') # expect string like 010001RH0 to send 010001 to handler 0.
+        rearr_index = int(rearr_index)
         
         try:
             rr = self.rrs[rearr_index]
