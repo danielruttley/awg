@@ -149,10 +149,26 @@ class RearrangementHandler():
             rr_start_freqs_MHz = start_freqs_MHz[:num_occupied_traps]
             rr_target_freqs_MHz = self.target_freq_MHz[:num_occupied_traps]
 
-            freq_movements = tuple(zip(rr_start_freqs_MHz,rr_target_freqs_MHz))
+            # Need to know whether frequency moves left or right
+            direction = self.start_freq_MHz[1] - self.start_freq_MHz[0]
+
+            freq_pairs = list(zip(rr_start_freqs_MHz,rr_target_freqs_MHz))
+            freq_movements = []
+
+            for freq_pair in freq_pairs:
+                diff = (freq_pair[1]-freq_pair[0]) * direction
+                if diff < 0:
+                    freq_movements.append(freq_pair)
+
+            for freq_pair in reversed(freq_pairs):
+                diff = (freq_pair[1]-freq_pair[0]) * direction
+                if diff > 0:
+                    freq_movements.append(freq_pair)
+
             self.rearr_movements.append(freq_movements)
+
         
-        self.rearr_unique_movements = set(itertools.chain.from_iterable([list(x) for x in self.rearr_movements]))
+        self.rearr_unique_movements = set(itertools.chain.from_iterable(self.rearr_movements))
 
         logging.debug('Calculated rearrangement movements {}'.format(self.rearr_movements))
         logging.debug('Unique rearrangement movements are {}'.format(self.rearr_unique_movements))
