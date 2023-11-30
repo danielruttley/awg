@@ -157,7 +157,7 @@ class RearrangementHandler():
 
             for freq_pair in freq_pairs:
                 diff = (freq_pair[1]-freq_pair[0]) * direction
-                if diff < 0:
+                if diff <= 0:
                     freq_movements.append(freq_pair)
 
             for freq_pair in reversed(freq_pairs):
