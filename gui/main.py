@@ -1081,7 +1081,7 @@ class MainWindow(QMainWindow):
                                           'start_freq_MHz': [100],
                                            'start_phase' : [0]},
                                 'amp' : {'function' : 'static',
-                                          'start_amp': [0]}}
+                                          'start_amp': [0.2]}}
                 action = ActionContainer(action_params,self.card_settings,self.amp_adjusters[channel])
                 action.rearr = False
                 action.sync = True
