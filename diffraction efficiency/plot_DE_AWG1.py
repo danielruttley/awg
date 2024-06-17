@@ -9,14 +9,15 @@ plt.close('all')
 plt.style.use('default')
 
 #%%
-freqs_df = pd.read_csv('AWG1 DAQ traces/DE_freqs_AWG1.csv',names=['frequency (MHz)'])
+# freqs_df = pd.read_csv('AWG3 DAQ traces/DE_freqs_AWG1.csv',names=['frequency (MHz)'])
+freqs_df = pd.read_csv('DE_freqs_AWG1.csv',names=['frequency (MHz)'])
 
 DAQ_channel = ' Dev4/ai0'
 
 segment_time = 0.0005 # length of each segment
 buffer_time = 0.0001 # amount that should be discarded from the beginning/end of each segment
 
-DAQ_file_dir = './AWG1 DAQ traces'
+DAQ_file_dir = './AWG3 DAQ traces'
 DAQ_file_names = [f for f in os.listdir(DAQ_file_dir) if os.path.isfile(os.path.join(DAQ_file_dir, f))]
 
 for file_name in DAQ_file_names:

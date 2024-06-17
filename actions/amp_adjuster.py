@@ -177,7 +177,7 @@ class AmpAdjuster2D():
             cal = self.calibration
             return cal.ev(optical_powers, freqs_MHz)
         else:
-            return optical_powers*self.non_adjusted_amp_mV
+            return np.array(optical_powers)*self.non_adjusted_amp_mV
 
 if __name__ == '__main__':
     # fdir = r'Z:\Tweezer\Experimental\Setup and characterisation\Settings and calibrations\tweezer calibrations\AWG calibrations'

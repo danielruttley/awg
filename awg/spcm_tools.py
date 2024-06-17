@@ -3,12 +3,13 @@ from ctypes import *
 # load registers for easier access
 from .py_header.regs import *
 
+
 #
 # **************************************************************************
 # szTypeToName: doing name translation
 # **************************************************************************
 #
-def szTypeToName (lCardType):
+def szTypeToName(lCardType):
     sName = ''
     lVersion = (lCardType & TYP_VERSIONMASK)
     if (lCardType & TYP_SERIESMASK) == TYP_M2ISERIES:
@@ -25,10 +26,11 @@ def szTypeToName (lCardType):
         sName = 'M4x.%04x-x4'%lVersion
     elif (lCardType & TYP_SERIESMASK) == TYP_M2PEXPSERIES:
         sName = 'M2p.%04x-x4'%lVersion
+    elif (lCardType & TYP_SERIESMASK) == TYP_M5IEXPSERIES:
+        sName = 'M5i.%04x-x16'%lVersion
     else:
         sName = 'unknown type'
     return sName
-
 
 
 #
@@ -50,5 +52,5 @@ def pvAllocMemPageAligned (qwBytes):
         dwOffset = dwAlignment - misalignment
     else:
         dwOffset = 0
-    return (c_char * qwBytes).from_buffer (pvNonAlignedBuf, dwOffset)
+    return(c_char * qwBytes).from_buffer(pvNonAlignedBuf, dwOffset)
 

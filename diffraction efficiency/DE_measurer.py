@@ -62,9 +62,12 @@ class Measurer(QMainWindow):
         if self.awg == 1:
             self.awgtcp = PyServer(host='', port=8623, name='AWG1') # AWG1 program runs separately
             self.awgrespond = PyClient(host='129.234.190.235', port=8626, name='AWG1 recv') # incoming from AWG
-        else:
+        elif self.awg == 2:
             self.awgtcp = PyServer(host='', port=8628, name='AWG2') # AWG2 program runs separately
             self.awgrespond = PyClient(host='129.234.190.233', port=8629, name='AWG2 recv') # incoming from AWG2
+        else:
+            self.awgtcp = PyServer(host='', port=8637, name='AWG3') # AWG3 program runs separately
+            self.awgrespond = PyClient(host='129.234.190.234', port=8639, name='AWG3 recv') # incoming from AWG3
         self.awgtcp.start()
         self.awgtcp.priority_messages([[0,'clear_response_queue= '+'#'*1000]])
 
@@ -156,10 +159,10 @@ class Measurer(QMainWindow):
 if __name__ == "__main__":
     from random import shuffle
 
-    awg = 1
+    awg = 3
     channel = 0
     params = 'DE_params_AWG{}.awg'.format(awg)
-    amps = list(np.linspace(0,250,101))#[250,150,100]
+    amps = list(np.linspace(0,380,101))#[250,150,100]
     dexter_length = 5 # dexter length in seconds that is waited for the DAQ to aquire
     
     shuffle(amps)

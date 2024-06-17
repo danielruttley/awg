@@ -1,0 +1,648 @@
+{
+    "card_settings": {
+        "active_channels": 2,
+        "sample_rate_Hz": 1250000000,
+        "max_output_mV": 400.0,
+        "number_of_segments": 16,
+        "segment_min_samples": 192,
+        "segment_step_samples": 32
+    },
+    "amp_adjuster_settings": [
+        {
+            "enabled": true,
+            "filename": "Z:/Tweezer/Code/Python 3.9/awg/diffraction efficiency/AWG3_calibration_19_03_2024_85MHz_135MHz.awgde",
+            "freq_limit_1_MHz": 85.0,
+            "freq_limit_2_MHz": 135.0,
+            "amp_limit_1": 0.0,
+            "amp_limit_2": 1.0,
+            "non_adjusted_amp_mV": 100.0
+        },
+        {
+            "enabled": false,
+            "filename": "Z:/Tweezer/Code/Python 3.9/awg/diffraction efficiency/AWG3_calibration_19_03_2024_85MHz_135MHz.awgde",
+            "freq_limit_1_MHz": 85.0,
+            "freq_limit_2_MHz": 135.0,
+            "amp_limit_1": 0.0,
+            "amp_limit_2": 1.0,
+            "non_adjusted_amp_mV": 100.0
+        }
+    ],
+    "datagen_settings": {
+        "button_couple_steps_segments": true,
+        "button_prevent_freq_jumps": false,
+        "button_prevent_amp_jumps": false,
+        "button_freq_adjust_looped_segments": true,
+        "button_prevent_phase_jumps": false,
+        "button_sync": false
+    },
+    "segments": [
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "optimise",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "start_phase": [
+                        0.0,
+                        122.53783491895348,
+                        35.674171991383574,
+                        311.9043478052832
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 2.0,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67130518,
+                        98.46785029,
+                        109.26439539,
+                        120.0609405
+                    ],
+                    "start_phase": [
+                        359.999998876825,
+                        122.53783498518169,
+                        35.674173462204635,
+                        311.9043491980992
+                    ]
+                },
+                "amp": {
+                    "function": "approx_exp",
+                    "start_amp": [
+                        0,
+                        0,
+                        0,
+                        0
+                    ],
+                    "end_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ],
+                    "index": [
+                        -20,
+                        -20,
+                        -20,
+                        -20
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "start_phase": [
+                        219.73099467158318,
+                        14.744065210223198,
+                        320.35430669784546,
+                        269.06356497108936
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 1.2499968,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "sweep",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "end_freq_MHz": [
+                        89.64342948717949,
+                        96.65464743589745,
+                        111.17788461538463,
+                        118.18910256410257
+                    ],
+                    "hybridicity": [
+                        0.895,
+                        0.895,
+                        0.895,
+                        0.895
+                    ],
+                    "start_phase": [
+                        219.73099354840815,
+                        14.7440652763471,
+                        320.35430816863663,
+                        269.0635663638823
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "optimise",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        89.64631317978247,
+                        96.64407389635318,
+                        111.18941938579655,
+                        118.18718010236725
+                    ],
+                    "start_phase": [
+                        0.0,
+                        133.68908562719173,
+                        358.42583246728424,
+                        314.6674129364092
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0019968,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        89.64342948717949,
+                        96.65464743589745,
+                        111.17788461538463,
+                        118.18910256410257
+                    ],
+                    "start_phase": [
+                        359.9999992111698,
+                        133.68908580043353,
+                        358.42583352909423,
+                        314.66741374414414
+                    ]
+                },
+                "amp": {
+                    "function": "two_tone",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ],
+                    "end_amp": [
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        89.64631317978247,
+                        96.64407389635318,
+                        111.18941938579655,
+                        118.18718010236725
+                    ],
+                    "start_phase": [
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 1.2499968,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "sweep",
+                    "start_freq_MHz": [
+                        89.64342948717949,
+                        96.65464743589745,
+                        111.17788461538463,
+                        118.18910256410257
+                    ],
+                    "end_freq_MHz": [
+                        87.67130518,
+                        98.46785029,
+                        109.26439539,
+                        120.0609405
+                    ],
+                    "hybridicity": [
+                        0.895,
+                        0.895,
+                        0.895,
+                        0.895
+                    ],
+                    "start_phase": [
+                        359.99999920851405,
+                        133.6890858005936,
+                        358.4258335337945,
+                        314.6674137470691
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "optimise",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "start_phase": [
+                        0.0,
+                        125.39981341357137,
+                        352.61532735514703,
+                        315.5114459742719
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 2.0,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67130518,
+                        98.46785029,
+                        109.26439539,
+                        120.0609405
+                    ],
+                    "start_phase": [
+                        359.999998876825,
+                        125.3998134797439,
+                        352.6153288260102,
+                        315.51144736725837
+                    ]
+                },
+                "amp": {
+                    "function": "approx_exp",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ],
+                    "end_amp": [
+                        0,
+                        0,
+                        0,
+                        0
+                    ],
+                    "index": [
+                        20,
+                        20,
+                        20,
+                        20
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        99.99300223928343
+                    ],
+                    "start_phase": [
+                        219.73099467158318
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25
+                    ]
+                }
+            }
+        }
+    ],
+    "steps": [
+        {
+            "segment": 0,
+            "number_of_loops": 1,
+            "after_step": "loop_until_trigger",
+            "rearr": false
+        }
+    ]
+}

@@ -122,8 +122,8 @@ class AWG():
         spcm_dwGetParam_i32(self.hCard, SPC_FNCTYPE, byref(lFncType))                  # Enquiry of the pointer should return 2. In manual p.59, this value corresponds to the arb. function generator. 
         spcm_dwSetParam_i32(self.hCard, SPC_CLOCKOUT, 0)                              # Disables the clock output (tristate). A value of 1 enables on external connector. Check p.83 on manual for more details.
         
-        if self.max_output_mV > 282:
-            self.max_output_mV = 282
+        if self.max_output_mV > 500:
+            self.max_output_mV = 500
             logging.error('Maxmimum output amplitude exceeds damage threshold '
                           'amplifier. Maximum amplitude (Vp) has been set to '
                           '{} mV'.format(self.max_output_mV))
