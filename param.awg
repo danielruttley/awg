@@ -1,6 +1,6 @@
 {
     "card_settings": {
-        "active_channels": 1,
+        "active_channels": 2,
         "sample_rate_Hz": 1250000000,
         "max_output_mV": 400.0,
         "number_of_segments": 16,
@@ -55,6 +55,23 @@
                         0.25
                     ]
                 }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0
+                    ]
+                }
             }
         },
         {
@@ -82,6 +99,23 @@
                         0,
                         0,
                         0,
+                        0
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        0.0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
                         0
                     ]
                 }
@@ -127,6 +161,23 @@
                         -20
                     ]
                 }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80
+                    ],
+                    "start_phase": [
+                        359.9999995811377
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
             }
         },
         {
@@ -157,31 +208,36 @@
                         0.25
                     ]
                 }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        79.99940019193858
+                    ],
+                    "start_phase": [
+                        359.9981024414301
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
             }
         },
         {
-            "duration_ms": 1.2499968,
+            "duration_ms": 4.9999872,
             "phase_behaviour": "continue",
             "Ch0": {
                 "freq": {
-                    "function": "sweep",
+                    "function": "static",
                     "start_freq_MHz": [
-                        87.67194497760717,
-                        98.46849008317339,
-                        109.2650351887396,
-                        120.06158029430583
-                    ],
-                    "end_freq_MHz": [
-                        89.64342948717949,
-                        96.65464743589745,
-                        111.17788461538463,
-                        118.18910256410257
-                    ],
-                    "hybridicity": [
-                        0.895,
-                        0.895,
-                        0.895,
-                        0.895
+                        87.67202444038257,
+                        98.46845207923734,
+                        109.26507971860408,
+                        120.06150735745885
                     ],
                     "start_phase": [
                         219.73099354840815,
@@ -199,6 +255,132 @@
                         0.25
                     ]
                 }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80.00000480001229
+                    ],
+                    "start_phase": [
+                        359.99810322304256
+                    ]
+                },
+                "amp": {
+                    "function": "ramp",
+                    "start_amp": [
+                        1
+                    ],
+                    "end_amp": [
+                        0.45
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "start_phase": [
+                        219.74072295427322,
+                        14.73302087187767,
+                        320.3598277568817,
+                        269.0448770225048
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        79.99940019193858
+                    ],
+                    "start_phase": [
+                        359.9909116625786
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.45
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 1.2499968,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "sweep",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "end_freq_MHz": [
+                        89.64342948717949,
+                        96.65464743589745,
+                        111.17788461538463,
+                        118.18910256410257
+                    ],
+                    "hybridicity": [
+                        0.895,
+                        0.895,
+                        0.895,
+                        0.895
+                    ],
+                    "start_phase": [
+                        219.7407218310982,
+                        14.733020938001573,
+                        320.3598292276729,
+                        269.0448784152977
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80
+                    ],
+                    "start_phase": [
+                        359.99091244419105
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.45
+                    ]
+                }
             }
         },
         {
@@ -215,9 +397,9 @@
                     ],
                     "start_phase": [
                         0.0,
-                        133.68908562719173,
-                        358.42583246728424,
-                        314.6674129364092
+                        133.6890856271918,
+                        358.4258324672843,
+                        314.6674129364093
                     ]
                 },
                 "amp": {
@@ -229,11 +411,28 @@
                         0.25
                     ]
                 }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        79.99940019193858
+                    ],
+                    "start_phase": [
+                        0.0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.45
+                    ]
+                }
             }
         },
         {
             "duration_ms": 0.0019968,
-            "phase_behaviour": "continue",
+            "phase_behaviour": "optimise",
             "Ch0": {
                 "freq": {
                     "function": "static",
@@ -244,10 +443,10 @@
                         118.18910256410257
                     ],
                     "start_phase": [
-                        359.9999992111698,
-                        133.68908580043353,
-                        358.42583352909423,
-                        314.66741374414414
+                        0.0,
+                        133.55718291394197,
+                        358.2034553327993,
+                        314.64309433316294
                     ]
                 },
                 "amp": {
@@ -262,6 +461,35 @@
                         0,
                         0,
                         0,
+                        0
+                    ],
+                    "drop_amp": [
+                        0,
+                        0.5,
+                        0,
+                        0.5
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80.12820512820514
+                    ],
+                    "start_phase": [
+                        0.0
+                    ]
+                },
+                "amp": {
+                    "function": "two_tone",
+                    "start_amp": [
+                        0.65
+                    ],
+                    "end_amp": [
+                        0
+                    ],
+                    "phase": [
                         0
                     ]
                 }
@@ -280,10 +508,10 @@
                         118.18718010236725
                     ],
                     "start_phase": [
-                        0,
-                        0,
-                        0,
-                        0
+                        359.9999999973443,
+                        133.5571829140972,
+                        358.20345533749787,
+                        314.64309433609014
                     ]
                 },
                 "amp": {
@@ -293,6 +521,23 @@
                         0.25,
                         0.25,
                         0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        79.99940019193858
+                    ],
+                    "start_phase": [
+                        359.99999999819556
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.45
                     ]
                 }
             }
@@ -322,10 +567,10 @@
                         0.895
                     ],
                     "start_phase": [
-                        359.99999920851405,
-                        133.6890858005936,
-                        358.4258335337945,
-                        314.6674137470691
+                        359.9999992083758,
+                        133.55718308733776,
+                        358.2034563992638,
+                        314.64309514383785
                     ]
                 },
                 "amp": {
@@ -335,6 +580,23 @@
                         0.25,
                         0.25,
                         0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80
+                    ],
+                    "start_phase": [
+                        7.797498255968094e-07
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.45
                     ]
                 }
             }
@@ -353,9 +615,9 @@
                     ],
                     "start_phase": [
                         0.0,
-                        125.39981341357137,
-                        352.61532735514703,
-                        315.5114459742719
+                        125.3999741320449,
+                        352.6152906648118,
+                        315.5115116544463
                     ]
                 },
                 "amp": {
@@ -365,6 +627,120 @@
                         0.25,
                         0.25,
                         0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        79.99940019193858
+                    ],
+                    "start_phase": [
+                        0.0
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.45
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 4.9999872,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67202444038257,
+                        98.46845207923734,
+                        109.26507971860408,
+                        120.06150735745885
+                    ],
+                    "start_phase": [
+                        359.999998876825,
+                        125.3999741980806,
+                        352.6152921356261,
+                        315.51151304738596
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80.00000480001229
+                    ],
+                    "start_phase": [
+                        7.816124707460403e-07
+                    ]
+                },
+                "amp": {
+                    "function": "ramp",
+                    "start_amp": [
+                        0.45
+                    ],
+                    "end_amp": [
+                        1
+                    ]
+                }
+            }
+        },
+        {
+            "duration_ms": 0.0400128,
+            "phase_behaviour": "continue",
+            "Ch0": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        87.67194497760717,
+                        98.46849008317339,
+                        109.2650351887396,
+                        120.06158029430583
+                    ],
+                    "start_phase": [
+                        0.009728282690048218,
+                        125.38892978429794,
+                        352.62081173062325,
+                        315.49282371997833
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0.25,
+                        0.25,
+                        0.25,
+                        0.25
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        79.99940019193858
+                    ],
+                    "start_phase": [
+                        359.99280923604965
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
                     ]
                 }
             }
@@ -382,10 +758,10 @@
                         120.0609405
                     ],
                     "start_phase": [
-                        359.999998876825,
-                        125.3998134797439,
-                        352.6153288260102,
-                        315.51144736725837
+                        0.009727159515023232,
+                        125.38892985042185,
+                        352.6208132014144,
+                        315.49282511277124
                     ]
                 },
                 "amp": {
@@ -409,6 +785,23 @@
                         20
                     ]
                 }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        80
+                    ],
+                    "start_phase": [
+                        359.9928100176621
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        1
+                    ]
+                }
             }
         },
         {
@@ -421,7 +814,24 @@
                         99.99300223928343
                     ],
                     "start_phase": [
-                        219.73099467158318
+                        219.74072295427322
+                    ]
+                },
+                "amp": {
+                    "function": "static",
+                    "start_amp": [
+                        0
+                    ]
+                }
+            },
+            "Ch1": {
+                "freq": {
+                    "function": "static",
+                    "start_freq_MHz": [
+                        104.99140275111965
+                    ],
+                    "start_phase": [
+                        359.9909128770232
                     ]
                 },
                 "amp": {
@@ -485,7 +895,7 @@
         {
             "segment": 8,
             "number_of_loops": 1,
-            "after_step": "continue",
+            "after_step": "loop_until_trigger",
             "rearr": false
         },
         {
@@ -502,6 +912,30 @@
         },
         {
             "segment": 11,
+            "number_of_loops": 1,
+            "after_step": "loop_until_trigger",
+            "rearr": false
+        },
+        {
+            "segment": 12,
+            "number_of_loops": 1,
+            "after_step": "continue",
+            "rearr": false
+        },
+        {
+            "segment": 13,
+            "number_of_loops": 1,
+            "after_step": "loop_until_trigger",
+            "rearr": false
+        },
+        {
+            "segment": 14,
+            "number_of_loops": 1,
+            "after_step": "continue",
+            "rearr": false
+        },
+        {
+            "segment": 15,
             "number_of_loops": 1,
             "after_step": "loop_until_trigger",
             "rearr": false

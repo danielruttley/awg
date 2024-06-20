@@ -161,8 +161,9 @@ if __name__ == "__main__":
 
     awg = 3
     channel = 0
-    params = 'DE_params_AWG{}.awg'.format(awg)
-    amps = list(np.linspace(0,380,101))#[250,150,100]
+    # params = 'DE_params_AWG{}.awg'.format(awg)
+    params = 'DE_params_AWG3_servo_AOM.awg'
+    amps = list(np.linspace(0,1000,101))#[250,150,100]
     dexter_length = 5 # dexter length in seconds that is waited for the DAQ to aquire
     
     shuffle(amps)

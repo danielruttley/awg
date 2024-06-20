@@ -840,12 +840,13 @@ class ActionContainer():
         _time = _time - _time[0] # we don't care about the actual time, just want an increasing array
         return np.linspace(start_amp,end_amp,len(_time))
     
-    def amp_two_tone(self,start_amp=1,end_amp=0,_time=None):
+    def amp_two_tone(self,start_amp=1,end_amp=0,phase=0,duty_cycle=0.5,_time=None):
         if _time is None:
             _time = self.time
-        amps = np.ones_like(_time)*start_amp
-        amps[int(len(amps)/2):] = end_amp
-        return amps
+        phase = phase%1
+        amps = np.ones_like(_time)*end_amp
+        amps[:int(len(amps)*duty_cycle)] = start_amp
+        return np.roll(amps,int(len(amps)*(phase-duty_cycle/2)))
     
     def amp_drop(self,start_amp=1,drop_amp=0,drop_time_us=100,_time=None):
         if _time is None:
