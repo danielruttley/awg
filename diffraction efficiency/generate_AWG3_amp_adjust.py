@@ -19,7 +19,7 @@ freqs = np.linspace(min(freqs_df.index),max(freqs_df.index),1000)
 x,y = np.meshgrid(freqs_df.columns.astype(float),freqs_df.index.astype(float))
 de = freqs_df
 
-PD = np.linspace(0.01, 0.3, 1000) # 1 will be set to this value
+PD = np.linspace(0.01, 0.7, 1000) # 1 will be set to this value
 plt.figure()
 c = plt.contour(y, x, de, PD)
 plt.xlabel('Frequency (MHz)')
@@ -105,7 +105,7 @@ ax.set_zlabel('RF Amplitude (mV)')
 fig.tight_layout()
 plt.show()
 
-with open(r'AWG3_calibration_19_03_2024_85MHz_135MHz.awgde', 'w') as f:
+with open(r'AWG3_calibration_04_10_2024_98MHz_118MHz.awgde', 'w') as f:
     json.dump(contours, f)
 
 #%%

@@ -283,13 +283,13 @@ class ArrayNormaliser():
 if __name__ == '__main__':
     name = 'AWG2'
     port = 8740
-    start_freq_MHz = [107.595, 105.545, 103.496, 101.446, 99.396, 97.346, 95.297, 93.247]
+    start_freq_MHz = [107.60000000000002, 105.55000000000003, 103.50000000000001, 101.45000000000002, 99.40000000000002, 97.35000000000002, 95.30000000000001, 93.25000000000001]
 
     start_amp = [0.12]*len(start_freq_MHz)#[1.5/len(start_freq_MHz)]*len(start_freq_MHz)
     # start_amp = None
-    iterations = 10
+    iterations = 100
     channel = 0
-    exposure_ms = 1# 0.1
+    exposure_ms = 0.1# 0.1
     roi = (883,550,1192,653)
     scale_index = 0.3
     distance_between_traps = 10

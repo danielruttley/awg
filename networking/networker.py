@@ -147,10 +147,11 @@ class Networker():
                 logging.error("SyntaxError in data string '{}'. Message ignored.".format(arg))
             self.server.priority_messages([[1,'go'*1000]])
         elif 'load' in command:
-            filename_stripped = arg.rsplit('.',1)[0]
-            self.main_window.load_params(filename_stripped+'.awg')
-            # self.main_window.load_rearr_params(filename_stripped+'.awgrr')
-            self.main_window.calculate_send()
+            if self.main_window.restore_after_multirun.isChecked():
+                filename_stripped = arg.rsplit('.',1)[0]
+                self.main_window.load_params(filename_stripped+'.awg')
+                # self.main_window.load_rearr_params(filename_stripped+'.awgrr')
+                self.main_window.calculate_send()
         elif 'save' in command:
             filename_stripped = arg.rsplit('.',1)[0]
             self.main_window.save_params(filename_stripped+'.awg')

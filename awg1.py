@@ -5,7 +5,7 @@ import sys
 from qtpy.QtWidgets import QApplication
 from gui import MainWindow
 
-network_settings = {"client_ip": "129.234.190.164",
+network_settings = {"client_ip": "192.168.23.10",
                     "client_port": 8623,
                     "server_ip": "",
                     "server_port": 8626}

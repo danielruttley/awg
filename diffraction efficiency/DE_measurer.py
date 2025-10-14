@@ -61,13 +61,13 @@ class Measurer(QMainWindow):
 
         if self.awg == 1:
             self.awgtcp = PyServer(host='', port=8623, name='AWG1') # AWG1 program runs separately
-            self.awgrespond = PyClient(host='129.234.190.235', port=8626, name='AWG1 recv') # incoming from AWG
+            self.awgrespond = PyClient(host='192.168.23.21', port=8626, name='AWG1 recv') # incoming from AWG
         elif self.awg == 2:
             self.awgtcp = PyServer(host='', port=8628, name='AWG2') # AWG2 program runs separately
-            self.awgrespond = PyClient(host='129.234.190.233', port=8629, name='AWG2 recv') # incoming from AWG2
+            self.awgrespond = PyClient(host='192.168.23.22', port=8629, name='AWG2 recv') # incoming from AWG2
         else:
             self.awgtcp = PyServer(host='', port=8637, name='AWG3') # AWG3 program runs separately
-            self.awgrespond = PyClient(host='129.234.190.234', port=8639, name='AWG3 recv') # incoming from AWG3
+            self.awgrespond = PyClient(host='192.168.23.23', port=8639, name='AWG3 recv') # incoming from AWG3
         self.awgtcp.start()
         self.awgtcp.priority_messages([[0,'clear_response_queue= '+'#'*1000]])
 

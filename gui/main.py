@@ -152,6 +152,11 @@ class MainWindow(QMainWindow):
         action_load_rearr_params.triggered.connect(self.load_rearr_params_dialogue)
         action_save_rearr_params.triggered.connect(self.save_rearr_params_dialogue)
         
+        self.restore_after_multirun = QAction(self,checkable=True)
+        self.restore_after_multirun.setText("Restore After Multirun")
+        self.restore_after_multirun.setChecked(True)
+
+
         menu_bar = self.menuBar()
         menu_main = menu_bar.addMenu("Menu")
         menu_main.addAction(action_load_params)
@@ -159,6 +164,7 @@ class MainWindow(QMainWindow):
         menu_main.addSeparator()
         menu_main.addAction(action_load_rearr_params)
         menu_main.addAction(action_save_rearr_params)
+        menu_main.addAction(self.restore_after_multirun)
 
 
     def _create_awg_header(self):
@@ -1336,10 +1342,14 @@ class MainWindow(QMainWindow):
             logging.info("Changing channel {}, segment {}, parameter '{}'"
                          " to {}.".format(channel,segment,param,values))
             
-            if segment == self.get_rearr_base_segments()[self.rr.segment]:
-                logging.info('Segment {} is the rearrangement segment, so all '
-                             'rearrangement segments will be recalculated.'.format(segment))
-                recalculate_rearr = True
+            try:
+                if segment == self.get_rearr_base_segments()[self.rr.segment]:
+                    logging.info('Segment {} is the rearrangement segment, so all '
+                                'rearrangement segments will be recalculated.'.format(segment))
+                    recalculate_rearr = True
+            except AttributeError:
+                logging.debug('Rearrangement handler did not exist so assuming that this '
+                              'segment is not a rearrangement segment,')
             
             if param in shared_segment_params:
                 logging.debug('Param {} is shared across all actions in the '
